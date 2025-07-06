@@ -311,7 +311,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     with col1:
         st.subheader("첫 해 연금수령액의 현재가치")
-        st.metric("현재를 기준으로 한 구매", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
+        st.metric("현재를 기준으로 한 구매력", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
 
     with col2:
         st.subheader("총 연금의 현재가치")
