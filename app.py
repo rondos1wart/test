@@ -252,7 +252,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
             first_year_pv = first_year_take_home / ((1 + inflation_rate) ** (first_year_age - inputs.start_age))
         if first_year_take_home > 0:
             pv_ratio = (first_year_pv / first_year_take_home) * 100
-            pv_ratio_text = f"수령액의 {pv_ratio:.1f}% 수준"
+            pv_ratio_text = f"미래의 구매력 = 세후 수령액의 {pv_ratio:.1f}% 수준"
     pv_help_text = f"첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 납입 시작 시점({inputs.start_age}세)의 가치로 환산({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다."
 
     # --- 계산: 일시금 수령액 ---
@@ -282,6 +282,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     with col_middle:
         st.subheader("총 연금의 현재가치")
+        # Removed custom styling and used st.metric for consistency
         st.metric(f"은퇴 후 {payout_years}년간 받을 연금 총액", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
 
 
@@ -289,66 +290,8 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         st.subheader("일시금 수령 시 (세후)")
         st.metric("세후 일시금 수령액", f"{lump_sum_take_home:,.0f} 원", help=lump_sum_help_text)
 
-# --- 💡 코드 수정: display_tax_choice_summary 함수 ---
-def display_tax_choice_summary(simulation_df):
-    """연금소득세 과세 방식 비교 결과를 보여줍니다."""
-    st.header("💡 연금소득세 비교 분석")
-
-    choice_df = simulation_df[simulation_df['선택'].isin(['종합과세', '분리과세'])].copy()
-
-    if choice_df.empty:
-        st.info("모든 연금 수령 기간 동안 총 연금소득이 1,500만원 이하로 예상되어, 유리한 저율 분리과세(3.3%~5.5%)가 적용됩니다.")
-        return
-
-    # 1. 도움말 수정 (연간 기준 명시)
-    st.info(
-        "**연간 총 연금소득** (현재 계산 중인 사적연금 + 다른 연금소득)이 **1,500만원을 초과**하는 해에는, "
-        "초과분에 대해 **종합과세**와 **16.5% 분리과세** 중 더 유리한 방식을 선택할 수 있습니다. "
-        "아래는 선택이 필요한 첫 해의 **연간 세금 예시**와 전체 기간에 대한 유불리 분석입니다."
-    )
-
-    # 2. 연간 세금 비교 UI (첫 해 예시)
-    first_choice_year = choice_df.iloc[0]
-    age_example = int(first_choice_year['나이'])
-    annual_comp_tax = first_choice_year['종합과세액']
-    annual_sep_tax = first_choice_year['분리과세액']
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f'<p style="text-align: center;">종합과세 선택 시 (예: {age_example}세)</p>', unsafe_allow_html=True)
-        st.markdown(f'<p style="text-align: center; font-size: 1.75rem; font-weight: bold;">{annual_comp_tax:,.0f} 원</p>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<p style="text-align: center;">분리과세(16.5%) 선택 시 (예: {age_example}세)</p>', unsafe_allow_html=True)
-        st.markdown(f'<p style="text-align: center; font-size: 1.75rem; font-weight: bold;">{annual_sep_tax:,.0f} 원</p>', unsafe_allow_html=True)
-
-    # 3. 전체 기간 유불리 판단 메시지 (계산은 총액 기준)
-    total_comprehensive_tax = choice_df['종합과세액'].sum()
-    total_separate_tax = choice_df['분리과세액'].sum()
-    st.write("") # Spacer
-
-    if total_comprehensive_tax < total_separate_tax:
-        conclusion_text = f"전체 기간을 고려하면 **종합과세**가 약 **{(total_separate_tax - total_comprehensive_tax):,.0f}원** 더 유리할 것으로 보입니다."
-    elif total_separate_tax < total_comprehensive_tax:
-        conclusion_text = f"전체 기간을 고려하면 **분리과세**가 약 **{(total_comprehensive_tax - total_separate_tax):,.0f}원** 더 유리할 것으로 보입니다."
-    else:
-        conclusion_text = "두 방식의 예상 세금 총액이 동일합니다."
-
-    st.markdown(f"""
-    <div style="background-color: #1C3B31; color: white; padding: 12px; border-radius: 5px; text-align: center; font-size: 1.1rem; margin-top: 1rem;">
-        {conclusion_text}
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 4. 상세 내역 (숨김 처리)
-    with st.expander("연도별 상세 세금 비교 보기"):
-        st.write("아래 표는 종합과세와 분리과세 중 선택이 필요한 연도의 상세 내역입니다.")
-        cols_to_format = ['과세대상 연금액', '종합과세액', '분리과세액']
-        for col in cols_to_format:
-            choice_df[col] = choice_df[col].apply(lambda x: f"{x:,.0f} 원")
-
-        display_cols = ['나이', '과세대상 연금액', '종합과세액', '분리과세액', '선택']
-        st.dataframe(choice_df[display_cols], use_container_width=True, hide_index=True)
-
+# --- display_tax_choice_summary 함수 (삭제됨) ---
+# 이 함수는 연도별 상세 세금 비교 보기 기능을 제공했으나, 사용자 요청에 따라 제거되었습니다.
 
 def display_simulation_details(simulation_df):
     """연금 인출 상세 시뮬레이션 결과(그래프, 테이블)를 보여줍니다."""
@@ -521,8 +464,51 @@ if st.session_state.get('calculated', False):
         display_asset_visuals(total_at_retirement, total_principal_paid, asset_growth_df, simulation_df)
         display_present_value_analysis(ui, simulation_df, total_at_retirement, total_non_deductible_paid)
 
+        # Removed: display_tax_choice_summary(simulation_df)
         if not simulation_df.empty:
-            display_tax_choice_summary(simulation_df)
+            # The tax comparison summary logic (excluding the detailed expander) can still be displayed if desired,
+            # but the detailed table expander is removed as per user request.
+            st.header("💡 연금소득세 비교 분석")
+            choice_df = simulation_df[simulation_df['선택'].isin(['종합과세', '분리과세'])].copy()
+            if choice_df.empty:
+                st.info("모든 연금 수령 기간 동안 총 연금소득이 1,500만원 이하로 예상되어, 유리한 저율 분리과세(3.3%~5.5%)가 적용됩니다.")
+            else:
+                st.info(
+                    "**연간 총 연금소득** (현재 계산 중인 사적연금과 다른 연금소득을 합산)이 **1,500만원을 초과**하는 해에는, "
+                    "초과분에 대해 **종합과세**와 **16.5% 분리과세** 중 더 유리한 방식을 선택할 수 있습니다. "
+                    "아래는 선택이 필요한 첫 해의 **연간 세금 예시**와 전체 기간에 대한 유불리 분석입니다."
+                )
+                first_choice_year = choice_df.iloc[0]
+                age_example = int(first_choice_year['나이'])
+                annual_comp_tax = first_choice_year['종합과세액']
+                annual_sep_tax = first_choice_year['분리과세액']
+
+                col1_tax, col2_tax = st.columns(2)
+                with col1_tax:
+                    st.markdown(f'<p style="text-align: center;">종합과세 선택 시 (예: {age_example}세)</p>', unsafe_allow_html=True)
+                    st.markdown(f'<p style="text-align: center; font-size: 1.75rem; font-weight: bold;">{annual_comp_tax:,.0f} 원</p>', unsafe_allow_html=True)
+                with col2_tax:
+                    st.markdown(f'<p style="text-align: center;">분리과세(16.5%) 선택 시 (예: {age_example}세)</p>', unsafe_allow_html=True)
+                    st.markdown(f'<p style="text-align: center; font-size: 1.75rem; font-weight: bold;">{annual_sep_tax:,.0f} 원</p>', unsafe_allow_html=True)
+                
+                total_comprehensive_tax = choice_df['종합과세액'].sum()
+                total_separate_tax = choice_df['분리과세액'].sum()
+                st.write("") # Spacer
+
+                if total_comprehensive_tax < total_separate_tax:
+                    conclusion_text = f"전체 기간을 고려하면 종합과세가 약 {(total_separate_tax - total_comprehensive_tax):,.0f}원 더 유리할 것으로 보입니다."
+                elif total_separate_tax < total_comprehensive_tax:
+                    conclusion_text = f"전체 기간을 고려하면 분리과세가 약 {(total_comprehensive_tax - total_separate_tax):,.0f}원 더 유리할 것으로 보입니다."
+                else:
+                    conclusion_text = "두 방식의 예상 세금 총액이 동일합니다."
+
+                st.markdown(f"""
+                <div style="background-color: #1C3B31; color: white; padding: 12px; border-radius: 5px; text-align: center; font-size: 1.1rem; margin-top: 1rem;">
+                    {conclusion_text}
+                </div>
+                """, unsafe_allow_html=True)
+
+
             with st.expander("연금 인출 상세 시뮬레이션 보기"):
                 display_simulation_details(simulation_df)
         else:
