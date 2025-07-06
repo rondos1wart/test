@@ -241,35 +241,29 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     # Initialize inflation_rate at the beginning of the function
     inflation_rate = inputs.inflation_rate / 100.0
 
-    # --- 2. 첫 해 수령액(현재가치) vs 일시금 수령액 비교 ---
-    taxable_lump_sum = total_at_retirement - total_non_deductible_paid
-    lump_sum_tax = calculate_lump_sum_tax(taxable_lump_sum)
-    lump_sum_take_home = total_at_retirement - lump_sum_tax
-    lump_sum_help_text = f"은퇴 후 일시금 수령 시, 과세대상금액({taxable_lump_sum:,.0f}원)에 대해 기타소득세(16.5%)가 적용됩니다."
-
+    # --- 계산: 첫 해 수령액(현재가치) ---
     first_year_pv = 0
     pv_ratio_text = None
     if not simulation_df.empty:
         first_year_row = simulation_df.iloc[0]
         first_year_take_home = first_year_row["연간 실수령액(세후)"]
         first_year_age = first_year_row["나이"]
-        if 1 + inflation_rate > 0: # This check is now safe as inflation_rate is always defined
+        if 1 + inflation_rate > 0:
             first_year_pv = first_year_take_home / ((1 + inflation_rate) ** (first_year_age - inputs.start_age))
         if first_year_take_home > 0:
             pv_ratio = (first_year_pv / first_year_take_home) * 100
             pv_ratio_text = f"수령액의 {pv_ratio:.1f}% 수준"
-
     pv_help_text = f"첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 납입 시작 시점({inputs.start_age}세)의 가치로 환산({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다."
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("연금 수령 시 (첫 해)")
-        st.metric("첫 해 연금수령액의 현재가치", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
+    # --- 계산: 일시금 수령액 ---
+    taxable_lump_sum = total_at_retirement - total_non_deductible_paid
+    lump_sum_tax = calculate_lump_sum_tax(taxable_lump_sum)
+    lump_sum_take_home = total_at_retirement - lump_sum_tax
+    lump_sum_help_text = f"은퇴 후 일시금 수령 시, 과세대상금액({taxable_lump_sum:,.0f}원)에 대해 기타소득세(16.5%)가 적용됩니다."
 
-    # --- 1. 연금 총액의 현재가치 계산 및 표시 (위치 변경) ---
+    # --- 계산: 총 연금의 현재가치 ---
     payout_years = inputs.end_age - inputs.retirement_age
     total_pension_pv = 0
-
     if not simulation_df.empty and (1 + inflation_rate > 0):
         pv_series = simulation_df.apply(
             lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - inputs.start_age)),
@@ -277,16 +271,27 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         )
         total_pension_pv = pv_series.sum()
 
-    st.markdown(f"""
-    <div style="
-        padding: 1.5rem; border-radius: 0.5rem; background-color: #FFFFFF;
-        border: 1px solid #E0E0E0; text-align: center; margin-top: 1rem; margin-bottom: 2rem;
-    ">
-        <p style="font-size: 1rem; margin-bottom: 0.5rem; color: #4F4F4F;">은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산하면,</p>
-        <p style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem; color: #31333F;">총 연금의 현재가치</p>
-        <p style="font-size: 2rem; font-weight: bold; color: #31333F;">약 {total_pension_pv:,.0f} 원</p>
-    </div>
-    """, unsafe_allow_html=True)
+
+    # --- UI 배치: 3개 열 사용 ---
+    col1, col_middle, col2 = st.columns([1, 1.5, 1]) # Adjust column ratios for better balance
+
+    with col1:
+        st.subheader("연금 수령 시 (첫 해)")
+        st.metric("첫 해 연금수령액의 현재가치", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
+
+    with col_middle:
+        st.subheader("총 연금의 현재가치")
+        st.markdown(f"""
+        <div style="
+            padding: 0.5rem; border-radius: 0.5rem; background-color: #FFFFFF;
+            border: 1px solid #E0E0E0; text-align: center; margin-top: 0.5rem; margin-bottom: 0.5rem;
+        ">
+            <p style="font-size: 0.9rem; margin-bottom: 0.2rem; color: #4F4F4F;">은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산하면,</p>
+            <p style="font-size: 1.1rem; font-weight: bold; margin-bottom: 0.2rem; color: #31333F;">총 연금의 현재가치</p>
+            <p style="font-size: 1.8rem; font-weight: bold; color: #31333F;">약 {total_pension_pv:,.0f} 원</p>
+        </div>
+        """, unsafe_allow_html=True)
+
 
     with col2:
         st.subheader("일시금 수령 시 (세후)")
