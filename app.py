@@ -282,13 +282,13 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
             pv_ratio = (first_year_pv / first_year_take_home) * 100
             pv_ratio_text = f"현재의 구매력으로 환산 시 {pv_ratio:.1f}% 수준"
     # 변경된 도움말 문구
-    pv_help_text = f"연금 수령 첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 현재를 기준으로 환산({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다.\n\n참고: 인플레이션은 연금을 납입하는 중에도 발생합니다."
+    pv_help_text = f"연금 수령 첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 현재를 기준으로 할인({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다.\n\n참고: 인플레이션은 연금을 납입하는 중에도 발생합니다."
 
     # --- 계산: 일시금 수령액 ---
     taxable_lump_sum = total_at_retirement - total_non_deductible_paid
     lump_sum_tax = calculate_lump_sum_tax(taxable_lump_sum)
     lump_sum_take_home = total_at_retirement - lump_sum_tax
-    lump_sum_help_text = f"은퇴 후 일시금 수령 시, 과세대상금액({taxable_lump_sum:,.0f}원)에 대해 기타소득세(16.5%)가 적용됩니다."
+    lump_sum_help_text = f"은퇴 후 일시금 수령 시, 과세대상금액({taxable_lump_sum:,.0f}원)에 대해 기타소득세(16.5%)가 적용됩니다.\n\n참고: 일시금으로 수령하는 경우에 일반적으로 손해를 봅니다."
 
     # --- 계산: 총 연금의 현재가치 ---
     payout_years = inputs.end_age - inputs.retirement_age
@@ -299,7 +299,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
             axis=1
         )
         total_pension_pv = pv_series.sum()
-    total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 총액을 현재 고객님의 나이({current_age_actual}세)의 가치로 환산한 금액입니다." # 도움말 문구 변경
+    total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 (세후) 총액을 현재를 기준으로 가치를 할인한 금액입니다." # 도움말 문구 변경
 
 
     # --- UI 배치: 3개 열 사용 ---
@@ -312,7 +312,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     with col_middle:
         st.subheader("총 연금의 현재가치")
         # Removed custom styling and used st.metric for consistency
-        st.metric(f"은퇴 후 {payout_years}년간 받을 연금 총액", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
+        st.metric(f"은퇴 후 {payout_years}년간 받을 연금 (세후) 총액", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
 
 
     with col2:
