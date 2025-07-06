@@ -45,16 +45,14 @@ COMPREHENSIVE_TAX_BRACKETS = [
 def calculate_total_at_retirement(inputs: UserInput):
     """은퇴 시점의 총 예상 적립금을 계산합니다."""
     pre_ret_rate = inputs.pre_retirement_return / 100.0
-    # 연간 수익률을 미리 계산하여 반복적인 계산을 줄입니다.
-    growth_factor = 1 + pre_ret_rate
     contribution_years = inputs.retirement_age - inputs.start_age
 
     asset_growth_data, current_value = [], 0
     for year in range(contribution_years):
         if inputs.contribution_timing == '연초':
-            current_value = (current_value + inputs.annual_contribution) * growth_factor
+            current_value = (current_value + inputs.annual_contribution) * (1 + pre_ret_rate)
         else:
-            current_value = current_value * growth_factor + inputs.annual_contribution
+            current_value = current_value * (1 + pre_ret_rate) + inputs.annual_contribution
         asset_growth_data.append({'year': inputs.start_age + year + 1, 'value': current_value})
     return current_value, pd.DataFrame(asset_growth_data)
 
@@ -87,8 +85,6 @@ def calculate_annual_pension_tax(payout_under_limit: float, other_pension_income
 def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_deductible_paid):
     """연금 인출 시뮬레이션을 실행하여 연도별 상세 데이터를 생성합니다."""
     post_ret_rate = inputs.post_retirement_return / 100.0
-    # 연간 수익률을 미리 계산하여 반복적인 계산을 줄입니다.
-    payout_growth_factor = 1 + post_ret_rate
     non_taxable_wallet = total_non_deductible_paid
     taxable_wallet = total_at_retirement - non_taxable_wallet
     payout_years = inputs.end_age - inputs.retirement_age
@@ -110,9 +106,8 @@ def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_dedu
         elif post_ret_rate <= -1:
             annual_payout = current_balance
         else:
-            # annuity_factor는 remaining_years에 따라 달라지므로 루프 밖으로 뺄 수 없음
-            annuity_factor_ordinary = (1 - payout_growth_factor**-remaining_years) / post_ret_rate
-            annuity_factor = annuity_factor_ordinary * payout_growth_factor
+            annuity_factor_ordinary = (1 - (1 + post_ret_rate)**-remaining_years) / post_ret_rate
+            annuity_factor = annuity_factor_ordinary * (1 + post_ret_rate)
             annual_payout = current_balance / annuity_factor if annuity_factor > 0 else 0
 
         annual_payout = min(annual_payout, current_balance)
@@ -127,6 +122,8 @@ def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_dedu
         pension_payout_under_limit = from_taxable
 
         if payout_year_count <= 10:
+            # The pension payout limit is calculated based on the balance at the beginning of the year
+            # For 1-10 years, the limit is (account balance at the start of the year * 120%) / (11 - current payout year)
             pension_payout_limit = (current_balance * 1.2) / (11 - payout_year_count)
             if from_taxable > pension_payout_limit:
                 pension_payout_over_limit = from_taxable - pension_payout_limit
@@ -146,8 +143,8 @@ def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_dedu
         annual_take_home = annual_payout - total_tax_paid
 
         # 4. 연말 잔액 업데이트
-        non_taxable_wallet = (non_taxable_wallet - from_non_taxable) * payout_growth_factor
-        taxable_wallet = (taxable_wallet - from_taxable) * payout_growth_factor
+        non_taxable_wallet = (non_taxable_wallet - from_non_taxable) * (1 + post_ret_rate)
+        taxable_wallet = (taxable_wallet - from_taxable) * (1 + post_ret_rate)
 
         annual_breakdown.append({
             "나이": current_age, "연간 수령액(세전)": annual_payout,
@@ -247,10 +244,8 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     total_pension_pv = 0
 
     if not simulation_df.empty and (1 + inflation_rate > 0):
-        # 물가상승률을 미리 계산하여 반복적인 계산을 줄입니다.
-        inflation_factor_per_year = 1 + inflation_rate
         pv_series = simulation_df.apply(
-            lambda row: row['연간 실수령액(세후)'] / (inflation_factor_per_year ** (row['나이'] - inputs.start_age)),
+            lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - inputs.start_age)),
             axis=1
         )
         total_pension_pv = pv_series.sum()
@@ -279,9 +274,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         first_year_take_home = first_year_row["연간 실수령액(세후)"]
         first_year_age = first_year_row["나이"]
         if 1 + inflation_rate > 0:
-            # 물가상승률을 미리 계산하여 반복적인 계산을 줄입니다.
-            inflation_factor_per_year = 1 + inflation_rate
-            first_year_pv = first_year_take_home / (inflation_factor_per_year ** (first_year_age - inputs.start_age))
+            first_year_pv = first_year_take_home / ((1 + inflation_rate) ** (first_year_age - inputs.start_age))
         if first_year_take_home > 0:
             pv_ratio = (first_year_pv / first_year_take_home) * 100
             pv_ratio_text = f"수령액의 {pv_ratio:.1f}% 수준"
@@ -400,20 +393,20 @@ def auto_calculate_non_deductible():
         st.session_state.non_deductible_contribution = 0
     reset_calculation_state()
 
-# --- 새 콜백 함수: 은퇴 나이 변경 시 수령 종료 나이 자동 조정 ---
-def update_end_age_on_retirement_change():
+def update_retirement_age_and_end_age():
     """
-    은퇴 나이가 변경될 때, 연금 수령 종료 나이가
-    '은퇴 나이 + 최소 연금 수령 기간(10년)'보다 작으면 해당 값으로 업데이트합니다.
+    은퇴 나이가 변경될 때 수령 종료 나이를 자동으로 조정하는 콜백 함수.
+    수령 종료 나이가 (은퇴 나이 + MIN_PAYOUT_YEARS)보다 작을 경우,
+    수령 종료 나이를 (은퇴 나이 + MIN_PAYOUT_YEARS)로 업데이트합니다.
     """
-    current_retirement_age = st.session_state.retirement_age
-    min_required_end_age = current_retirement_age + MIN_PAYOUT_YEARS
+    reset_calculation_state() # 계산 상태 초기화
 
-    # 현재 수령 종료 나이가 최소 요구 나이보다 작을 경우에만 업데이트
+    # 새로운 은퇴 나이에 따른 최소 수령 종료 나이 계산
+    min_required_end_age = st.session_state.retirement_age + MIN_PAYOUT_YEARS
+
+    # 현재 수령 종료 나이가 최소 요구치보다 작으면 업데이트
     if st.session_state.end_age < min_required_end_age:
         st.session_state.end_age = min_required_end_age
-    reset_calculation_state()
-
 
 # --- 세션 상태 초기화 ---
 def initialize_session():
@@ -448,9 +441,9 @@ with st.sidebar:
     st.header("정보 입력")
 
     st.number_input("납입 시작 나이", 15, 100, key='start_age', on_change=reset_calculation_state)
-    # 은퇴 나이 변경 시 수령 종료 나이 자동 조정을 위한 on_change 콜백 추가
-    st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_end_age_on_retirement_change)
-    # 수령 종료 나이의 최소값은 항상 '은퇴 나이 + MIN_PAYOUT_YEARS' 이상으로 설정
+    # Modified: Added update_retirement_age_and_end_age to on_change
+    st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_retirement_age_and_end_age)
+    # Modified: The min_value for end_age is now dynamically set based on retirement_age
     st.number_input("수령 종료 나이", st.session_state.retirement_age + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
 
     st.subheader("투자 성향 및 수익률 (%)")
@@ -500,7 +493,7 @@ with st.sidebar:
         if ui.non_deductible_contribution > ui.annual_contribution: errors.append("'비과세 원금'은 '연간 총 납입액'보다 클 수 없습니다.")
 
         if errors:
-            for error in errors: st.error(error, icon="🚨")
+            for error in errors: st.error(error, icon="�")
             st.session_state.calculated = False
         else:
             st.session_state.calculated = True
@@ -552,3 +545,4 @@ with st.expander("주의사항 및 가정 보기"):
     6. **일시금 수령 세금**: 연금 수령 연령에 도달하여 연금 외 형태로 수령하는 경우, **기타소득세(16.5%)**가 적용되어 계산됩니다.
     7. **세법 기준**: 이 계산기는 **현행 세법**을 기반으로 하며, 향후 세법 개정 시 결과가 달라질 수 있습니다.
     """)
+�
