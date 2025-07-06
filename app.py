@@ -218,7 +218,7 @@ def display_initial_summary(inputs: UserInput, total_at_retirement, simulation_d
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(f"{inputs.retirement_age}세 시점 총 적립금", f"{total_at_retirement:,.0f} 원")
     col2.metric("연간 수령액 (세후)", f"{first_year_take_home:,.0f} 원")
-    col3.metric("월간 수령액 (세후)", f"{monthly_take_home:,.0f} 원") # 새로운 월간 수령액 열
+    col3.metric("월간 수령액 (세후)", f"{monthly_take_home:,.0f} 원", help="연간 수령액을 12로 나눈 값입니다.") # 새로운 월간 수령액 열에 도움말 추가
     col4.metric("총 예상 절세액 (세액공제)", f"{total_tax_credit:,.0f} 원", help="납입 기간 동안 최대로 받을 수 있는 세액공제 혜택의 총합입니다.")
 
 def display_asset_visuals(total_at_retirement, total_principal, asset_growth_df, simulation_df):
@@ -290,40 +290,34 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     lump_sum_take_home = total_at_retirement - lump_sum_tax
     lump_sum_help_text = f"은퇴 후 일시금 수령 시, 과세대상금액({taxable_lump_sum:,.0f}원)에 대해 기타소득세(16.5%)가 적용됩니다.\n\n참고: 일시금으로 수령하는 경우에 일반적으로 손해를 봅니다."
 
-    # --- 계산: 총 연금의 현재가치 ---
-    payout_years = inputs.end_age - inputs.retirement_age
-    total_pension_pv = 0
-    if not simulation_df.empty and (1 + inflation_rate > 0):
-        pv_series = simulation_df.apply(
-            lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - current_age_actual)),
-            axis=1
-        )
-        total_pension_pv = pv_series.sum()
-    total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 (세후) 총액을 현재를 기준으로 가치를 할인한 금액입니다." # 도움말 문구 변경
+    # Calculate the present value of the lump sum for comparison
+    discounted_lump_sum = 0
+    if inputs.retirement_age >= current_age_actual and (1 + inflation_rate) > 0:
+        years_to_discount = inputs.retirement_age - current_age_actual
+        discounted_lump_sum = lump_sum_take_home / ((1 + inflation_rate) ** years_to_discount)
 
     # --- 계산: 총 연금을 분기마다 연금으로 수령 (세후) ---
     total_nominal_after_tax_pension = simulation_df['연간 실수령액(세후)'].sum() if not simulation_df.empty else 0
     # 수정된 부분: inputs.post_retirement_return으로 접근
     total_nominal_after_tax_pension_help_text = f"은퇴 후 {payout_years}년간 받게 될 총 연금 실수령액(세후)의 명목 금액입니다. 이는 물가상승률이 반영되지 않은 단순 합계액입니다. 이 금액에는 은퇴 후 잔여 자산에 대한 투자 수익({inputs.post_retirement_return}% 은퇴 후 수익률 적용)이 포함됩니다." # 도움말 문구 보강
 
-    # --- UI 배치: 4개 열 사용 ---
-    col1, col2, col3, col4 = st.columns([1, 1, 1.5, 1]) # Adjust column ratios for better balance
+    # --- UI 배치: 3개 열로 변경 (총 연금의 현재가치 섹터 제거) ---
+    col1, col2, col3 = st.columns([1, 1.5, 1]) # Adjust column ratios for better balance
 
     with col1:
         st.subheader("첫 해 연금 수령액의 현재가치")
         st.metric("현재를 기준으로 환산한 구매력", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
 
     with col2:
-        st.subheader("총 연금의 현재가치")
-        st.metric(f"총 연금 (세후) 현재가치", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
-
-    with col3:
         st.subheader("총 연금 인출액 (세후, 명목)") # 새로운 섹터 헤더 명칭 변경
         st.metric("총 인출액 (세후)", f"{total_nominal_after_tax_pension:,.0f} 원", help=total_nominal_after_tax_pension_help_text) # Metric 이름 변경
 
-    with col4:
+    with col3:
         st.subheader("일시금 수령 시 (세후)")
         st.metric("세후 일시금 수령액", f"{lump_sum_take_home:,.0f} 원", help=lump_sum_help_text)
+        # 새로운 문구 추가
+        if lump_sum_take_home > 0:
+            st.markdown(f"<span style='font-size: 0.9em; color: grey;'>물가상승률을 고려하면 현재의 {discounted_lump_sum:,.0f}원과 같은 구매력을 가집니다.</span>", unsafe_allow_html=True)
 
 # --- display_tax_choice_summary 함수 (삭제됨) ---
 # 이 함수는 연도별 상세 세금 비교 보기 기능을 제공했으나, 사용자 요청에 따라 제거되었습니다.
