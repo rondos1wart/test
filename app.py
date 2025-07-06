@@ -266,7 +266,8 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     """현재가치 분석 및 일시금 수령액을 비교하여 보여줍니다."""
     st.header("🕒 현재가치 분석 및 일시금 수령 비교")
 
-    # Initialize inflation_rate at the beginning of the function
+    # --- 변수 정의 (상단으로 이동) ---
+    payout_years = inputs.end_age - inputs.retirement_age # payout_years 정의를 상단으로 이동
     inflation_rate = inputs.inflation_rate / 100.0
 
     # --- 계산: 첫 해 수령액(현재가치) ---
