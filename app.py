@@ -21,6 +21,7 @@ class UserInput:
     other_comprehensive_income: int
     income_level: str
     contribution_timing: str
+    current_age_actual: int # 추가: 현재 고객의 실제 나이
 
 # 소득 구간 선택 옵션
 INCOME_LEVEL_LOW = '총급여 5,500만원 이하 (종합소득 4,500만원 이하)'
@@ -257,7 +258,7 @@ def display_asset_visuals(total_at_retirement, total_principal, asset_growth_df,
         fig.update_traces(textposition='inside', textinfo='percent+label')
         st.plotly_chart(fig, use_container_width=True)
 
-def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_retirement, total_non_deductible_paid):
+def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_retirement, total_non_deductible_paid, current_age_actual: int):
     """현재가치 분석 및 일시금 수령액을 비교하여 보여줍니다."""
     st.header("🕒 현재가치 분석 및 일시금 수령 비교")
 
@@ -272,11 +273,12 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         first_year_take_home = first_year_row["연간 실수령액(세후)"]
         first_year_age = first_year_row["나이"]
         if 1 + inflation_rate > 0:
-            first_year_pv = first_year_take_home / ((1 + inflation_rate) ** (first_year_age - inputs.start_age))
+            first_year_pv = first_year_take_home / ((1 + inflation_rate) ** (first_year_age - current_age_actual))
         if first_year_take_home > 0:
             pv_ratio = (first_year_pv / first_year_take_home) * 100
             pv_ratio_text = f"미래의 구매력 = 세후 수령액의 {pv_ratio:.1f}% 수준"
-    pv_help_text = f"첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 납입 시작 시점({inputs.start_age}세)의 가치로 환산({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다."
+    # 변경된 도움말 문구
+    pv_help_text = f"첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 현재 고객님의 나이({current_age_actual}세)의 가치로 환산({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다."
 
     # --- 계산: 일시금 수령액 ---
     taxable_lump_sum = total_at_retirement - total_non_deductible_paid
@@ -289,11 +291,11 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     total_pension_pv = 0
     if not simulation_df.empty and (1 + inflation_rate > 0):
         pv_series = simulation_df.apply(
-            lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - inputs.start_age)),
+            lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - current_age_actual)),
             axis=1
         )
         total_pension_pv = pv_series.sum()
-    total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산한 금액입니다."
+    total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 총액을 현재 고객님의 나이({current_age_actual}세)의 가치로 환산한 금액입니다." # 도움말 문구 변경
 
 
     # --- UI 배치: 3개 열 사용 ---
@@ -392,6 +394,7 @@ def initialize_session():
     st.session_state.other_comprehensive_income = 0
     st.session_state.income_level = INCOME_LEVEL_LOW
     st.session_state.contribution_timing = '연말'
+    st.session_state.current_age_actual = 30 # 초기값 설정 (납입 시작 나이와 동일하게 설정)
 
     st.session_state.investment_profile = '중립형'
     st.session_state.auto_calc_non_deductible = False
@@ -410,6 +413,8 @@ with st.sidebar:
     st.number_input("납입 시작 나이", 15, 100, key='start_age', on_change=reset_calculation_state)
     st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_retirement_age_and_end_age)
     st.number_input("수령 종료 나이", MIN_RETIREMENT_AGE + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
+    st.number_input("현재 고객님의 나이", 15, 120, key='current_age_actual', on_change=reset_calculation_state, help="미래 연금액을 현재 시점의 가치로 환산하기 위한 고객님의 실제 현재 나이를 입력하세요.")
+
 
     st.subheader("투자 성향 및 수익률 (%)")
     profile_help = "각 투자 성향별 예상 수익률(은퇴 전/후)입니다:\n- 안정형: 4.0% / 3.0%\n-- 중립형: 6.0% / 4.0%\n- 공격형: 8.0% / 5.0%"
@@ -447,7 +452,8 @@ with st.sidebar:
             other_private_pension_income=st.session_state.other_private_pension_income, 
             public_pension_income=st.session_state.public_pension_income, 
             other_comprehensive_income=st.session_state.other_comprehensive_income,
-            income_level=st.session_state.income_level, contribution_timing=st.session_state.contribution_timing
+            income_level=st.session_state.income_level, contribution_timing=st.session_state.contribution_timing,
+            current_age_actual=st.session_state.current_age_actual # 추가
         )
         st.session_state.user_input_obj = current_inputs
 
@@ -459,6 +465,7 @@ with st.sidebar:
         if ui.end_age - ui.retirement_age < MIN_PAYOUT_YEARS: errors.append(f"최소 연금 수령 기간은 {MIN_PAYOUT_YEARS}년입니다.")
         if ui.annual_contribution > MAX_CONTRIBUTION_LIMIT: errors.append(f"연간 총 납입액은 최대 한도({MAX_CONTRIBUTION_LIMIT:,.0f}원)를 초과할 수 없습니다.")
         if ui.non_deductible_contribution > ui.annual_contribution: errors.append("'비과세 원금'은 '연간 총 납입액'보다 클 수 없습니다.")
+        # if ui.current_age_actual < ui.start_age: errors.append("현재 나이가 납입 시작 나이보다 어릴 수 없습니다.") # 현재 나이 유효성 검사 제거
 
         if errors:
             for error in errors: st.error(error, icon="🚨")
@@ -487,7 +494,8 @@ if st.session_state.get('calculated', False):
 
         display_initial_summary(ui, total_at_retirement, simulation_df, total_tax_credit)
         display_asset_visuals(total_at_retirement, total_principal_paid, asset_growth_df, simulation_df)
-        display_present_value_analysis(ui, simulation_df, total_at_retirement, total_non_deductible_paid)
+        # current_age_actual 인자 추가
+        display_present_value_analysis(ui, simulation_df, total_at_retirement, total_non_deductible_paid, ui.current_age_actual)
 
         if not simulation_df.empty:
             st.header("💡 연금소득세 비교 분석")
@@ -530,11 +538,9 @@ if st.session_state.get('calculated', False):
                 </div>
                 """, unsafe_allow_html=True)
 
-            # 여기에 줄바꿈 추가
-            st.write("") # 작은 수직 공간 추가
-
-            with st.expander("연금 인출 상세 시뮬레이션 보기"):
-                display_simulation_details(simulation_df)
+            st.markdown("---") # 구분선 추가
+            st.header("📊 연금 인출 상세 시뮬레이션")
+            display_simulation_details(simulation_df)
         else:
             st.warning("인출 기간 동안 수령할 금액이 없습니다. 은퇴 시점 잔액이 너무 적거나 인출 기간이 짧을 수 있습니다.")
     else:
