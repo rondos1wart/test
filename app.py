@@ -303,7 +303,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     # --- 계산: 총 연금을 분기마다 연금으로 수령 (세후) ---
     total_nominal_after_tax_pension = simulation_df['연간 실수령액(세후)'].sum() if not simulation_df.empty else 0
-    total_nominal_after_tax_pension_help_text = f"은퇴 후 {payout_years}년간 받게 될 총 연금 실수령액(세후)의 명목 금액입니다. 이는 물가상승률이 반영되지 않은 단순 합계액입니다. 이 금액은 은퇴 후 잔여 자산에 대한 투자 수익이 포함됩니다." # 도움말 문구 보강
+    total_nominal_after_tax_pension_help_text = f"은퇴 후 {payout_years}년간 받게 될 총 연금 실수령액(세후)의 명목 금액입니다. 이는 물가상승률이 반영되지 않은 단순 합계액입니다. 이 금액에는 은퇴 후 잔여 자산에 대한 투자 수익({post_retirement_return}% 은퇴 후 수익률 적용)이 포함됩니다." # 도움말 문구 보강
 
     # --- UI 배치: 4개 열 사용 ---
     col1, col2, col3, col4 = st.columns([1, 1, 1.5, 1]) # Adjust column ratios for better balance
