@@ -310,7 +310,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     col1, col2, col3, col4 = st.columns([1, 1, 1.5, 1]) # Adjust column ratios for better balance
 
     with col1:
-        st.subheader("첫 해에 받을 연금 수령액의\n현재가치")
+        st.subheader("첫 해 연금 수령액의 현재가치")
         st.metric("현재를 기준으로 한 구매력", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
 
     with col2:
