@@ -412,7 +412,7 @@ with st.sidebar:
     st.number_input("수령 종료 나이", MIN_RETIREMENT_AGE + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
 
     st.subheader("투자 성향 및 수익률 (%)")
-    profile_help = "각 투자 성향별 예상 수익률(은퇴 전/후)입니다:\n- 안정형: 4.0% / 3.0%\n- 중립형: 6.0% / 4.0%\n- 공격형: 8.0% / 5.0%"
+    profile_help = "각 투자 성향별 예상 수익률(은퇴 전/후)입니다:\n- 안정형: 4.0% / 3.0%\n-- 중립형: 6.0% / 4.0%\n- 공격형: 8.0% / 5.0%"
     st.selectbox("투자 성향 선택", list(PROFILES.keys()), key="investment_profile", on_change=update_from_profile, help=profile_help)
     is_direct_input = st.session_state.investment_profile == '직접 입력'
     help_text_return = "투자는 원금 손실이 발생할 수 있으며, 손실이 예상될 경우에만 음수 값을 입력하세요."
@@ -433,7 +433,7 @@ with st.sidebar:
 
     st.subheader("세금 정보")
     st.selectbox("현재 연 소득 구간 (세액공제율 결정)", [INCOME_LEVEL_LOW, INCOME_LEVEL_HIGH], key='income_level', on_change=reset_calculation_state)
-    st.info("💡 은퇴 후 다른 소득이 있으신가요?\n정확한 과세표준 계산이 어렵다면 0으로 비워둘 수 있으나, 이 경우 종합과세 시 세금 계산이 부정확해질 수 있습니다.")
+    st.info("💡 은퇴 후 다른 소득이 있으신가요?\n\n정확한 과세표준 계산이 어렵다면 0으로 비워둘 수 있으나, 이 경우 종합과세 시 세금 계산이 부정확해질 수 있습니다.")
     st.number_input("퇴직연금 등 다른 사적연금 소득 (연간 세전)", 0, key='other_private_pension_income', step=500000, on_change=reset_calculation_state)
     st.number_input("공적연금 소득 (연간 세전)", 0, key='public_pension_income', step=500000, on_change=reset_calculation_state)
     st.number_input("연금을 제외한 종합소득에 의한 과세표준", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="사업소득, 임대소득, 이자/배당소득 등 연금소득을 제외한 나머지 소득에 대해 필요경비 및 모든 소득공제(인적공제, 특별소득공제 등)를 차감한 후의 최종 과세표준을 입력하세요.")
