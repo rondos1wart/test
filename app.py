@@ -303,7 +303,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     # --- 계산: 총 연금을 분기마다 연금으로 수령 (세후) ---
     total_nominal_after_tax_pension = simulation_df['연간 실수령액(세후)'].sum() if not simulation_df.empty else 0
-    total_nominal_after_tax_pension_help_text = f"은퇴 후 {payout_years}년간 받게 될 총 연금 실수령액(세후)의 명목 금액입니다. 이는 물가상승률이 반영되지 않은 단순 합계액입니다."
+    total_nominal_after_tax_pension_help_text = f"은퇴 후 {payout_years}년간 받게 될 총 연금 실수령액(세후)의 명목 금액입니다. 이는 물가상승률이 반영되지 않은 단순 합계액입니다. 이 금액은 은퇴 후 잔여 자산에 대한 투자 수익이 포함됩니다." # 도움말 문구 보강
 
     # --- UI 배치: 4개 열 사용 ---
     col1, col2, col3, col4 = st.columns([1, 1, 1.5, 1]) # Adjust column ratios for better balance
@@ -317,8 +317,8 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         st.metric(f"총 연금 (세후) 현재가치", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
 
     with col3:
-        st.subheader("예정된 연금 수령 총액 (세후)") # 새로운 섹터 헤더
-        st.metric("연금 (세후) 수령 총액", f"{total_nominal_after_tax_pension:,.0f} 원", help=total_nominal_after_tax_pension_help_text)
+        st.subheader("총 연금 인출액 (세후, 명목)") # 새로운 섹터 헤더 명칭 변경
+        st.metric("총 인출액 (세후)", f"{total_nominal_after_tax_pension:,.0f} 원", help=total_nominal_after_tax_pension_help_text) # Metric 이름 변경
 
     with col4:
         st.subheader("일시금 수령 시 (세후)")
