@@ -443,8 +443,8 @@ with st.sidebar:
     st.number_input("납입 시작 나이", 15, 100, key='start_age', on_change=reset_calculation_state)
     # Modified: Added update_retirement_age_and_end_age to on_change
     st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_retirement_age_and_end_age)
-    # Modified: The min_value for end_age is now dynamically set based on retirement_age
-    st.number_input("수령 종료 나이", st.session_state.retirement_age + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
+    # Modified: The min_value for end_age is now a static value
+    st.number_input("수령 종료 나이", MIN_RETIREMENT_AGE + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
 
     st.subheader("투자 성향 및 수익률 (%)")
     profile_help = "각 투자 성향별 예상 수익률(은퇴 전/후)입니다:\n- 안정형: 4.0% / 3.0%\n- 중립형: 6.0% / 4.0%\n- 공격형: 8.0% / 5.0%"
