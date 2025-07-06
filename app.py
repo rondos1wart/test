@@ -270,6 +270,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
             axis=1
         )
         total_pension_pv = pv_series.sum()
+    total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산한 금액입니다."
 
 
     # --- UI 배치: 3개 열 사용 ---
@@ -281,16 +282,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     with col_middle:
         st.subheader("총 연금의 현재가치")
-        st.markdown(f"""
-        <div style="
-            padding: 0.5rem; border-radius: 0.5rem; background-color: #FFFFFF;
-            border: 1px solid #E0E0E0; text-align: center; margin-top: 0.5rem; margin-bottom: 0.5rem;
-        ">
-            <p style="font-size: 0.9rem; margin-bottom: 0.2rem; color: #4F4F4F;">은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산하면,</p>
-            <p style="font-size: 1.1rem; font-weight: bold; margin-bottom: 0.2rem; color: #31333F;">총 연금의 현재가치</p>
-            <p style="font-size: 1.8rem; font-weight: bold; color: #31333F;">약 {total_pension_pv:,.0f} 원</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(f"은퇴 후 {payout_years}년간 받을 연금 총액", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
 
 
     with col2:
