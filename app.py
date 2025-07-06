@@ -238,6 +238,9 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     """현재가치 분석 및 일시금 수령액을 비교하여 보여줍니다."""
     st.header("🕒 현재가치 분석 및 일시금 수령 비교")
 
+    # Initialize inflation_rate at the beginning of the function
+    inflation_rate = inputs.inflation_rate / 100.0
+
     # --- 2. 첫 해 수령액(현재가치) vs 일시금 수령액 비교 ---
     taxable_lump_sum = total_at_retirement - total_non_deductible_paid
     lump_sum_tax = calculate_lump_sum_tax(taxable_lump_sum)
@@ -250,7 +253,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         first_year_row = simulation_df.iloc[0]
         first_year_take_home = first_year_row["연간 실수령액(세후)"]
         first_year_age = first_year_row["나이"]
-        if 1 + inflation_rate > 0:
+        if 1 + inflation_rate > 0: # This check is now safe as inflation_rate is always defined
             first_year_pv = first_year_take_home / ((1 + inflation_rate) ** (first_year_age - inputs.start_age))
         if first_year_take_home > 0:
             pv_ratio = (first_year_pv / first_year_take_home) * 100
@@ -265,7 +268,6 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     # --- 1. 연금 총액의 현재가치 계산 및 표시 (위치 변경) ---
     payout_years = inputs.end_age - inputs.retirement_age
-    inflation_rate = inputs.inflation_rate / 100.0
     total_pension_pv = 0
 
     if not simulation_df.empty and (1 + inflation_rate > 0):
