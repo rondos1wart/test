@@ -317,8 +317,8 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         st.metric(f"총 연금 (세후) 현재가치", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
 
     with col3:
-        st.subheader("총 연금 명목 수령액 (세후)") # 새로운 섹터 헤더
-        st.metric("총 연금 (세후) 명목액", f"{total_nominal_after_tax_pension:,.0f} 원", help=total_nominal_after_tax_pension_help_text)
+        st.subheader("예정된 연금 수령 총액 (세후)") # 새로운 섹터 헤더
+        st.metric("연금 (세후) 수령 총액", f"{total_nominal_after_tax_pension:,.0f} 원", help=total_nominal_after_tax_pension_help_text)
 
     with col4:
         st.subheader("일시금 수령 시 (세후)")
