@@ -21,7 +21,7 @@ class UserInput:
     other_comprehensive_income: int
     income_level: str
     contribution_timing: str
-    current_age_actual: int # 추가: 현재 고객의 실제 나이
+    current_age_actual: int # 추가: 현재 이용자의 실제 나이
 
 # 소득 구간 선택 옵션
 INCOME_LEVEL_LOW = '총급여 5,500만원 이하 (종합소득 4,500만원 이하)'
@@ -301,21 +301,26 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         total_pension_pv = pv_series.sum()
     total_pension_pv_help_text = f"은퇴 후 {payout_years}년간 받을 연금 (세후) 총액을 현재를 기준으로 가치를 할인한 금액입니다." # 도움말 문구 변경
 
+    # --- 계산: 총 연금을 분기마다 연금으로 수령 (세후) ---
+    total_nominal_after_tax_pension = simulation_df['연간 실수령액(세후)'].sum() if not simulation_df.empty else 0
+    total_nominal_after_tax_pension_help_text = f"은퇴 후 {payout_years}년간 받게 될 총 연금 실수령액(세후)의 명목 금액입니다. 이는 물가상승률이 반영되지 않은 단순 합계액입니다."
 
-    # --- UI 배치: 3개 열 사용 ---
-    col1, col_middle, col2 = st.columns([1, 1.5, 1]) # Adjust column ratios for better balance
+    # --- UI 배치: 4개 열 사용 ---
+    col1, col2, col3, col4 = st.columns([1, 1, 1.5, 1]) # Adjust column ratios for better balance
 
     with col1:
         st.subheader("첫 해 연금수령액의 구매력")
         st.metric("첫 해 연금수령액 (연간)", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
 
-    with col_middle:
-        st.subheader("총 연금의 현재가치")
-        # Removed custom styling and used st.metric for consistency
-        st.metric(f"은퇴 후 {payout_years}년간 받을 연금 (세후) 총액", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
-
-
     with col2:
+        st.subheader("총 연금의 현재가치")
+        st.metric(f"총 연금 (세후) 현재가치", f"{total_pension_pv:,.0f} 원", help=total_pension_pv_help_text)
+
+    with col3:
+        st.subheader("총 연금 명목 수령액 (세후)") # 새로운 섹터 헤더
+        st.metric("총 연금 (세후) 명목액", f"{total_nominal_after_tax_pension:,.0f} 원", help=total_nominal_after_tax_pension_help_text)
+
+    with col4:
         st.subheader("일시금 수령 시 (세후)")
         st.metric("세후 일시금 수령액", f"{lump_sum_take_home:,.0f} 원", help=lump_sum_help_text)
 
@@ -420,7 +425,7 @@ with st.sidebar:
     st.number_input("납입 시작 나이", 15, 100, key='start_age', on_change=reset_calculation_state)
     st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_retirement_age_and_end_age)
     st.number_input("수령 종료 나이", MIN_RETIREMENT_AGE + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
-    st.number_input("현재 고객님의 나이", 15, 120, key='current_age_actual', on_change=reset_calculation_state, help="미래 연금액을 현재 시점의 가치로 환산하기 위한 고객님의 실제 현재 나이를 입력하세요.")
+    st.number_input("현재 이용자님의 나이", 15, 120, key='current_age_actual', on_change=reset_calculation_state, help="미래 연금액을 현재 시점의 가치로 환산하기 위해 실제 나이(현재)를 입력하세요.")
 
 
     st.subheader("투자 성향 및 수익률 (%)")
