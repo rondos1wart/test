@@ -16,7 +16,8 @@ class UserInput:
     annual_contribution: int
     non_deductible_contribution: int
     other_non_deductible_total: int
-    other_pension_income: int
+    other_private_pension_income: int # 변경: 다른 사적연금 소득으로 명확화
+    public_pension_income: int # 추가: 공적연금 소득
     other_comprehensive_income: int
     income_level: str
     contribution_timing: str
@@ -56,31 +57,53 @@ def calculate_total_at_retirement(inputs: UserInput):
         asset_growth_data.append({'year': inputs.start_age + year + 1, 'value': current_value})
     return current_value, pd.DataFrame(asset_growth_data)
 
-def calculate_annual_pension_tax(payout_under_limit: float, other_pension_income: int, other_comprehensive_income: int, current_age: int) -> dict:
-    """연간 연금소득세를 계산하고, 과세 방식 선택 과정을 반환합니다."""
-    total_pension_gross = payout_under_limit + other_pension_income
+def calculate_annual_pension_tax(private_pension_gross: float, user_inputs: UserInput, current_age: int) -> dict:
+    """
+    연간 연금소득세를 계산하고, 과세 방식 선택 과정을 반환합니다.
+    private_pension_gross: 현재 계산 중인 사적연금(연금저축)의 연간 과세 대상 수령액
+    user_inputs: UserInput 객체 전체를 전달하여 다른 연금 소득 및 종합 소득에 접근
+    """
 
-    if total_pension_gross <= PENSION_TAX_THRESHOLD:
+    # 1. 사적연금 1,500만원 이하인 경우: 저율 분리과세
+    if private_pension_gross <= PENSION_TAX_THRESHOLD:
         if current_age < 70: rate = PENSION_TAX_RATES["under_70"]
         elif current_age < 80: rate = PENSION_TAX_RATES["under_80"]
         else: rate = PENSION_TAX_RATES["over_80"]
-        tax = payout_under_limit * rate
+        tax = private_pension_gross * rate
         return {'chosen': tax, 'comprehensive': tax, 'separate': tax, 'choice': "저율과세"}
+    # 2. 사적연금 1,500만원 초과인 경우: 종합과세 vs 16.5% 분리과세 선택
     else:
-        # 옵션 A: 종합과세 시 추가되는 세액 계산
-        taxable_other_income = (other_pension_income - get_pension_income_deduction_amount(other_pension_income)) + other_comprehensive_income
-        tax_without_private_pension = get_comprehensive_tax(taxable_other_income)
-        taxable_total_income = (total_pension_gross - get_pension_income_deduction_amount(total_pension_gross)) + other_comprehensive_income
-        tax_with_private_pension = get_comprehensive_tax(taxable_total_income)
-        tax_on_private_pension_comp = max(0, tax_with_private_pension - tax_without_private_pension)
+        # 옵션 A: 종합과세 시 세액 계산
+        # 모든 연금소득 합산 (현재 사적연금 + 다른 사적연금 + 공적연금)
+        total_pension_income_for_comp = private_pension_gross + user_inputs.other_private_pension_income + user_inputs.public_pension_income
+        
+        # 연금소득공제는 총 연금소득(공적 + 사적)에 대해 적용
+        taxable_pension_income_for_comp = total_pension_income_for_comp - get_pension_income_deduction_amount(total_pension_income_for_comp)
 
-        # 옵션 B: 16.5% 분리과세 시 세액 계산
-        separate_tax = payout_under_limit * SEPARATE_TAX_RATE
+        # 사적연금(현재 계산 중인 것)을 제외한 다른 종합소득만 있을 때의 세금
+        # (다른 사적연금 + 공적연금)의 총합에 대한 연금소득공제 적용
+        total_other_pension_income_for_deduction = user_inputs.other_private_pension_income + user_inputs.public_pension_income
+        taxable_other_pension_income_only = total_other_pension_income_for_deduction - get_pension_income_deduction_amount(total_other_pension_income_for_deduction)
+        
+        taxable_income_without_current_private = taxable_other_pension_income_only + user_inputs.other_comprehensive_income
+
+        tax_without_private_pension = get_comprehensive_tax(taxable_income_without_current_private)
+
+        # 사적연금 포함 모든 소득이 있을 때의 세금
+        taxable_all_income = taxable_pension_income_for_comp + user_inputs.other_comprehensive_income
+        tax_with_private_pension_comprehensive = get_comprehensive_tax(taxable_all_income)
+
+        # 사적연금으로 인해 추가되는 종합소득세
+        tax_on_private_pension_comp = max(0, tax_with_private_pension_comprehensive - tax_without_private_pension)
+
+        # 옵션 B: 16.5% 분리과세 시 세액 계산 (사적연금 전체에 16.5% 적용)
+        separate_tax = private_pension_gross * SEPARATE_TAX_RATE
 
         if tax_on_private_pension_comp < separate_tax:
             return {'chosen': tax_on_private_pension_comp, 'comprehensive': tax_on_private_pension_comp, 'separate': separate_tax, 'choice': "종합과세"}
         else:
             return {'chosen': separate_tax, 'comprehensive': tax_on_private_pension_comp, 'separate': separate_tax, 'choice': "분리과세"}
+
 
 def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_deductible_paid):
     """연금 인출 시뮬레이션을 실행하여 연도별 상세 데이터를 생성합니다."""
@@ -114,12 +137,12 @@ def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_dedu
 
         # 2. 인출 재원 구분 (비과세 재원 우선 인출)
         from_non_taxable = min(annual_payout, non_taxable_wallet)
-        from_taxable = annual_payout - from_non_taxable
+        from_taxable = annual_payout - from_non_taxable # from_taxable이 사적연금의 과세대상 수령액
 
         # 3. 과세 대상 인출액에 대한 세금 계산
         pension_tax_info = {'chosen': 0, 'comprehensive': 0, 'separate': 0, 'choice': "해당없음"}
         tax_on_limit_excess = 0
-        pension_payout_under_limit = from_taxable
+        pension_payout_under_limit = from_taxable # 이 변수명은 이제 "private_pension_gross"와 동일한 의미
 
         if payout_year_count <= 10:
             # The pension payout limit is calculated based on the balance at the beginning of the year
@@ -127,14 +150,13 @@ def run_payout_simulation(inputs: UserInput, total_at_retirement, total_non_dedu
             pension_payout_limit = (current_balance * 1.2) / (11 - payout_year_count)
             if from_taxable > pension_payout_limit:
                 pension_payout_over_limit = from_taxable - pension_payout_limit
-                pension_payout_under_limit = pension_payout_limit
+                pension_payout_under_limit = pension_payout_limit # 한도 내 금액은 연금소득세, 초과분은 기타소득세
                 tax_on_limit_excess = pension_payout_over_limit * OTHER_INCOME_TAX_RATE
 
         if pension_payout_under_limit > 0:
             pension_tax_info = calculate_annual_pension_tax(
-                payout_under_limit=pension_payout_under_limit,
-                other_pension_income=inputs.other_pension_income,
-                other_comprehensive_income=inputs.other_comprehensive_income,
+                private_pension_gross=pension_payout_under_limit, # 사적연금 과세 대상 금액만 전달
+                user_inputs=inputs, # UserInput 객체 전체 전달
                 current_age=current_age
             )
 
@@ -364,7 +386,8 @@ def initialize_session():
     st.session_state.inflation_rate = 3.5
     st.session_state.annual_contribution = 6_000_000
     st.session_state.other_non_deductible_total = 0
-    st.session_state.other_pension_income = 0
+    st.session_state.other_private_pension_income = 0 # 초기화 추가
+    st.session_state.public_pension_income = 0 # 초기화 추가
     st.session_state.other_comprehensive_income = 0
     st.session_state.income_level = INCOME_LEVEL_LOW
     st.session_state.contribution_timing = '연말'
@@ -384,9 +407,7 @@ with st.sidebar:
     st.header("정보 입력")
 
     st.number_input("납입 시작 나이", 15, 100, key='start_age', on_change=reset_calculation_state)
-    # Modified: Added update_retirement_age_and_end_age to on_change
     st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_retirement_age_and_end_age)
-    # Modified: The min_value for end_age is now a static value
     st.number_input("수령 종료 나이", MIN_RETIREMENT_AGE + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
 
     st.subheader("투자 성향 및 수익률 (%)")
@@ -411,9 +432,12 @@ with st.sidebar:
 
     st.subheader("세금 정보")
     st.selectbox("연 소득 구간 (세액공제율 결정)", [INCOME_LEVEL_LOW, INCOME_LEVEL_HIGH], key='income_level', on_change=reset_calculation_state)
-    st.info("**💡 은퇴 후 다른 소득이 있으신가요?**\n\n소득 종류에 따라 세금 계산이 달라집니다. 아래 항목을 구분해서 입력하면 더 정확한 결과를 얻을 수 있습니다.")
-    st.number_input("국민연금 등 다른 연금 소득 (연간 세전)", 0, key='other_pension_income', step=500000, on_change=reset_calculation_state)
-    st.number_input("임대, 사업 등 그 외 종합소득금액", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="부동산 임대소득 등 사업소득금액(총수입-필요경비)을 입력하세요.")
+    st.info("**💡 은퇴 후 다른 소득이 있으신가요?**")
+    # 변경된 필드 레이블
+    st.number_input("IRP 등 다른 사적연금 소득 (연간 세전)", 0, key='other_private_pension_income', step=500000, on_change=reset_calculation_state)
+    # 새로 추가된 필드
+    st.number_input("공적연금 소득 (연간 세전)", 0, key='public_pension_income', step=500000, on_change=reset_calculation_state)
+    st.number_input("임대 등 사업소득에 의한 종합소득금액", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="부동산 임대소득 등 사업소득금액(총수입-필요경비)을 입력하세요.")
 
     if st.button("결과 확인하기", type="primary"):
         current_inputs = UserInput(
@@ -421,7 +445,9 @@ with st.sidebar:
             pre_retirement_return=st.session_state.pre_retirement_return, post_retirement_return=st.session_state.post_retirement_return,
             inflation_rate=st.session_state.inflation_rate, annual_contribution=st.session_state.annual_contribution,
             non_deductible_contribution=st.session_state.non_deductible_contribution, other_non_deductible_total=st.session_state.other_non_deductible_total,
-            other_pension_income=st.session_state.other_pension_income, other_comprehensive_income=st.session_state.other_comprehensive_income,
+            other_private_pension_income=st.session_state.other_private_pension_income, # 업데이트
+            public_pension_income=st.session_state.public_pension_income, # 업데이트
+            other_comprehensive_income=st.session_state.other_comprehensive_income,
             income_level=st.session_state.income_level, contribution_timing=st.session_state.contribution_timing
         )
         st.session_state.user_input_obj = current_inputs
@@ -474,8 +500,8 @@ if st.session_state.get('calculated', False):
                 st.info("모든 연금 수령 기간 동안 총 연금소득이 1,500만원 이하로 예상되어, 유리한 저율 분리과세(3.3%~5.5%)가 적용됩니다.")
             else:
                 st.info(
-                    "**연간 총 연금소득** (현재 계산 중인 사적연금과 다른 연금소득을 합산)이 **1,500만원을 초과**하는 해에는, "
-                    "초과분에 대해 **종합과세**와 **16.5% 분리과세** 중 더 유리한 방식을 선택할 수 있습니다. "
+                    "**연간 사적연금 소득**이 **1,500만원을 초과**하는 해에는, "
+                    "**해당 사적연금 소득 전체**에 대해 **종합과세**와 **16.5% 분리과세** 중 더 유리한 방식을 선택할 수 있습니다. "
                     "아래는 선택이 필요한 첫 해의 **연간 세금 예시**와 전체 기간에 대한 유불리 분석입니다."
                 )
                 first_choice_year = choice_df.iloc[0]
