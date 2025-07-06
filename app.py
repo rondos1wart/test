@@ -493,7 +493,7 @@ with st.sidebar:
         if ui.non_deductible_contribution > ui.annual_contribution: errors.append("'비과세 원금'은 '연간 총 납입액'보다 클 수 없습니다.")
 
         if errors:
-            for error in errors: st.error(error, icon="�")
+            for error in errors: st.error(error, icon="🚨")
             st.session_state.calculated = False
         else:
             st.session_state.calculated = True
@@ -545,4 +545,3 @@ with st.expander("주의사항 및 가정 보기"):
     6. **일시금 수령 세금**: 연금 수령 연령에 도달하여 연금 외 형태로 수령하는 경우, **기타소득세(16.5%)**가 적용되어 계산됩니다.
     7. **세법 기준**: 이 계산기는 **현행 세법**을 기반으로 하며, 향후 세법 개정 시 결과가 달라질 수 있습니다.
     """)
-�
