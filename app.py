@@ -318,7 +318,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         st.metric("세후 일시금 수령액", f"{lump_sum_take_home:,.0f} 원", help=lump_sum_help_text)
         # 새로운 문구 추가
         if lump_sum_take_home > 0:
-            st.markdown(f"<span style='font-size: 0.9em; color: grey;'>물가상승률을 고려하면 현재의 {discounted_lump_sum:,.0f}원과 같은 구매력을 가집니다.</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='font-size: 0.9em; color: grey;'>▲ 물가상승률을 고려하면 현재의 {discounted_lump_sum:,.0f}원과 같은 구매력을 가집니다.</span>", unsafe_allow_html=True)
 
 # --- display_tax_choice_summary 함수 (삭제됨) ---
 # 이 함수는 연도별 상세 세금 비교 보기 기능을 제공했으나, 사용자 요청에 따라 제거되었습니다.
