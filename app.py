@@ -530,6 +530,8 @@ if st.session_state.get('calculated', False):
                 </div>
                 """, unsafe_allow_html=True)
 
+            # 여기에 줄바꿈 추가
+            st.write("") # 작은 수직 공간 추가
 
             with st.expander("연금 인출 상세 시뮬레이션 보기"):
                 display_simulation_details(simulation_df)
