@@ -238,29 +238,6 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     """현재가치 분석 및 일시금 수령액을 비교하여 보여줍니다."""
     st.header("🕒 현재가치 분석 및 일시금 수령 비교")
 
-    # --- 1. 연금 총액의 현재가치 계산 및 표시 ---
-    payout_years = inputs.end_age - inputs.retirement_age
-    inflation_rate = inputs.inflation_rate / 100.0
-    total_pension_pv = 0
-
-    if not simulation_df.empty and (1 + inflation_rate > 0):
-        pv_series = simulation_df.apply(
-            lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - inputs.start_age)),
-            axis=1
-        )
-        total_pension_pv = pv_series.sum()
-
-    st.markdown(f"""
-    <div style="
-        padding: 1.5rem; border-radius: 0.5rem; background-color: #FFFFFF;
-        border: 1px solid #E0E0E0; text-align: center; margin-top: 1rem; margin-bottom: 2rem;
-    ">
-        <p style="font-size: 1rem; margin-bottom: 0.5rem; color: #4F4F4F;">은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산하면,</p>
-        <p style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem; color: #31333F;">총 연금의 현재가치</p>
-        <p style="font-size: 2rem; font-weight: bold; color: #31333F;">약 {total_pension_pv:,.0f} 원</p>
-    </div>
-    """, unsafe_allow_html=True)
-
     # --- 2. 첫 해 수령액(현재가치) vs 일시금 수령액 비교 ---
     taxable_lump_sum = total_at_retirement - total_non_deductible_paid
     lump_sum_tax = calculate_lump_sum_tax(taxable_lump_sum)
@@ -285,6 +262,30 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     with col1:
         st.subheader("연금 수령 시 (첫 해)")
         st.metric("첫 해 연금수령액의 현재가치", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
+
+    # --- 1. 연금 총액의 현재가치 계산 및 표시 (위치 변경) ---
+    payout_years = inputs.end_age - inputs.retirement_age
+    inflation_rate = inputs.inflation_rate / 100.0
+    total_pension_pv = 0
+
+    if not simulation_df.empty and (1 + inflation_rate > 0):
+        pv_series = simulation_df.apply(
+            lambda row: row['연간 실수령액(세후)'] / ((1 + inflation_rate) ** (row['나이'] - inputs.start_age)),
+            axis=1
+        )
+        total_pension_pv = pv_series.sum()
+
+    st.markdown(f"""
+    <div style="
+        padding: 1.5rem; border-radius: 0.5rem; background-color: #FFFFFF;
+        border: 1px solid #E0E0E0; text-align: center; margin-top: 1rem; margin-bottom: 2rem;
+    ">
+        <p style="font-size: 1rem; margin-bottom: 0.5rem; color: #4F4F4F;">은퇴 후 {payout_years}년간 받을 연금 총액을 현재가치로 환산하면,</p>
+        <p style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem; color: #31333F;">총 연금의 현재가치</p>
+        <p style="font-size: 2rem; font-weight: bold; color: #31333F;">약 {total_pension_pv:,.0f} 원</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     with col2:
         st.subheader("일시금 수령 시 (세후)")
         st.metric("세후 일시금 수령액", f"{lump_sum_take_home:,.0f} 원", help=lump_sum_help_text)
