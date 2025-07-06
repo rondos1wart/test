@@ -318,7 +318,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         # 기존 st.metric을 수정하여 delta 스타일 적용
         lump_sum_delta_text = None
         if lump_sum_take_home > 0:
-            lump_sum_delta_text = f"⬆ 물가상승률을 고려하면 현재의 {discounted_lump_sum:,.0f}원과 같은 구매력을 가집니다."
+            lump_sum_delta_text = f"물가상승률을 고려하면 현재의 {discounted_lump_sum:,.0f}원과 같은 구매력을 가집니다."
         st.metric("세후 일시금 수령액", f"{lump_sum_take_home:,.0f} 원", delta=lump_sum_delta_text, delta_color="off", help=lump_sum_help_text)
 
 
