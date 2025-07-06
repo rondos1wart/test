@@ -282,7 +282,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
             pv_ratio = (first_year_pv / first_year_take_home) * 100
             pv_ratio_text = f"현재의 구매력으로 환산 시 {pv_ratio:.1f}% 수준"
     # 변경된 도움말 문구
-    pv_help_text = f"즉, 연금 수령 첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액을 현재를 기준으로 할인({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다.\n\n참고: 인플레이션은 연금을 납입하는 중에도 발생합니다."
+    pv_help_text = f"즉, 연금 수령 첫 해({inputs.retirement_age}세)에 받는 세후 연금수령액(연간)을 현재를 기준으로 할인({inputs.inflation_rate}% 물가상승률 적용)한 금액입니다.\n\n참고: 인플레이션은 연금을 납입하는 중에도 발생합니다."
 
     # --- 계산: 일시금 수령액 ---
     taxable_lump_sum = total_at_retirement - total_non_deductible_paid
@@ -311,7 +311,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
 
     with col1:
         st.subheader("첫 해 연금 수령액의 현재가치")
-        st.metric("현재를 기준으로 한 구매력", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
+        st.metric("현재를 기준으로 환산한 구매력", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
 
     with col2:
         st.subheader("총 연금의 현재가치")
