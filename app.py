@@ -306,7 +306,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
     col1, col_middle, col2 = st.columns([1, 1.5, 1]) # Adjust column ratios for better balance
 
     with col1:
-        st.subheader("연금 수령 시 (첫 해)")
+        st.subheader("첫 해 연금수령액의 구매력")
         st.metric("첫 해 연금수령액의 구매", f"{first_year_pv:,.0f} 원", delta=pv_ratio_text, delta_color="off", help=pv_help_text)
 
     with col_middle:
