@@ -85,6 +85,7 @@ def calculate_annual_pension_tax(private_pension_gross: float, user_inputs: User
         total_other_pension_income_for_deduction = user_inputs.other_private_pension_income + user_inputs.public_pension_income
         taxable_other_pension_income_only = total_other_pension_income_for_deduction - get_pension_income_deduction_amount(total_other_pension_income_for_deduction)
         
+        # 변경된 부분: other_comprehensive_income이 이미 과세표준이라고 가정
         taxable_income_without_current_private = taxable_other_pension_income_only + user_inputs.other_comprehensive_income
 
         tax_without_private_pension = get_comprehensive_tax(taxable_income_without_current_private)
@@ -386,8 +387,8 @@ def initialize_session():
     st.session_state.inflation_rate = 3.5
     st.session_state.annual_contribution = 6_000_000
     st.session_state.other_non_deductible_total = 0
-    st.session_state.other_private_pension_income = 0 # 초기화 추가
-    st.session_state.public_pension_income = 0 # 초기화 추가
+    st.session_state.other_private_pension_income = 0 
+    st.session_state.public_pension_income = 0 
     st.session_state.other_comprehensive_income = 0
     st.session_state.income_level = INCOME_LEVEL_LOW
     st.session_state.contribution_timing = '연말'
@@ -433,11 +434,9 @@ with st.sidebar:
     st.subheader("세금 정보")
     st.selectbox("연 소득 구간 (세액공제율 결정)", [INCOME_LEVEL_LOW, INCOME_LEVEL_HIGH], key='income_level', on_change=reset_calculation_state)
     st.info("**💡 은퇴 후 다른 소득이 있으신가요?**")
-    # 변경된 필드 레이블
-    st.number_input("IRP 등 다른 사적연금 소득 (연간 세전)", 0, key='other_private_pension_income', step=500000, on_change=reset_calculation_state)
-    # 새로 추가된 필드
+    st.number_input("퇴직연금 등 다른 사적연금 소득 (연간 세전)", 0, key='other_private_pension_income', step=500000, on_change=reset_calculation_state)
     st.number_input("공적연금 소득 (연간 세전)", 0, key='public_pension_income', step=500000, on_change=reset_calculation_state)
-    st.number_input("임대 등 사업소득에 의한 종합소득금액", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="부동산 임대소득 등 사업소득금액(총수입-필요경비)을 입력하세요.")
+    st.number_input("연금을 제외한 종합소득에 의한 과세표준", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="사업소득, 임대소득, 이자/배당소득 등 연금소득을 제외한 나머지 소득에 대해 필요경비 및 모든 소득공제(인적공제, 특별소득공제 등)를 차감한 후의 최종 과세표준을 입력하세요.")
 
     if st.button("결과 확인하기", type="primary"):
         current_inputs = UserInput(
@@ -445,8 +444,8 @@ with st.sidebar:
             pre_retirement_return=st.session_state.pre_retirement_return, post_retirement_return=st.session_state.post_retirement_return,
             inflation_rate=st.session_state.inflation_rate, annual_contribution=st.session_state.annual_contribution,
             non_deductible_contribution=st.session_state.non_deductible_contribution, other_non_deductible_total=st.session_state.other_non_deductible_total,
-            other_private_pension_income=st.session_state.other_private_pension_income, # 업데이트
-            public_pension_income=st.session_state.public_pension_income, # 업데이트
+            other_private_pension_income=st.session_state.other_private_pension_income, 
+            public_pension_income=st.session_state.public_pension_income, 
             other_comprehensive_income=st.session_state.other_comprehensive_income,
             income_level=st.session_state.income_level, contribution_timing=st.session_state.contribution_timing
         )
@@ -490,10 +489,7 @@ if st.session_state.get('calculated', False):
         display_asset_visuals(total_at_retirement, total_principal_paid, asset_growth_df, simulation_df)
         display_present_value_analysis(ui, simulation_df, total_at_retirement, total_non_deductible_paid)
 
-        # Removed: display_tax_choice_summary(simulation_df)
         if not simulation_df.empty:
-            # The tax comparison summary logic (excluding the detailed expander) can still be displayed if desired,
-            # but the detailed table expander is removed as per user request.
             st.header("💡 연금소득세 비교 분석")
             choice_df = simulation_df[simulation_df['선택'].isin(['종합과세', '분리과세'])].copy()
             if choice_df.empty:
