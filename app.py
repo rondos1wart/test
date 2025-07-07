@@ -25,6 +25,7 @@ class UserInput:
     income_level: str  # 소득 구간 (세액공제율 결정용)
     contribution_timing: str  # 연간 납입 시점 ('연초' 또는 '연말')
     current_age_actual: int  # 현재 이용자의 실제 나이 (현재가치 계산용)
+    include_pension_deduction: bool # 연금소득공제 포함 여부
 
 # 소득 구간 선택 옵션 정의
 INCOME_LEVEL_LOW = '총급여 5,500만원 이하 (종합소득 4,500만원 이하)'
@@ -112,10 +113,10 @@ def calculate_annual_pension_tax(private_pension_gross: float, user_inputs: User
     # 2. 사적연금 1,500만원 초과인 경우: 종합과세 vs 16.5% 분리과세 선택
     else:
         # 옵션 A: 종합과세 시 세액 계산
-        # 모든 연금소득 합산 (현재 사적연금 + 다른 사적연금 + 공적연금)
+        # 모든 연금소득 합산 (연금저축계좌 + 퇴직연금 + 공적연금)
         total_pension_income_for_comp = private_pension_gross + user_inputs.other_private_pension_income + user_inputs.public_pension_income
         
-        # 연금소득공제는 총 연금소득(공적 + 사적)에 대해 적용
+        # 연금소득공제는 총 연금소득(공적연금 + 사적연금)에 대해 적용
         taxable_pension_income_for_comp = total_pension_income_for_comp - get_pension_income_deduction_amount(total_pension_income_for_comp)
 
         # 사적연금(현재 계산 중인 것)을 제외한 다른 종합소득만 있을 때의 세금 계산
@@ -246,6 +247,7 @@ def get_pension_income_deduction_amount(pension_income):
     """
     연금소득공제액을 계산합니다.
     공적연금과 사적연금 합산 금액에 대해 적용됩니다.
+    '연금소득공제를 계산에 포함하려면 체크하세요.' 체크박스에 따라 공제 여부가 결정됩니다.
 
     Args:
         pension_income (float): 총 연금 소득.
@@ -253,6 +255,12 @@ def get_pension_income_deduction_amount(pension_income):
     Returns:
         float: 연금소득공제액.
     """
+    # 체크박스가 해제된 경우 연금소득공제액을 0으로 반환
+    if not st.session_state.get('include_pension_deduction', True):
+        return 0
+
+    if pension_income == 0:
+        return 0
     if pension_income <= 3_500_000:
         return pension_income
     if pension_income <= 7_000_000:
@@ -526,6 +534,13 @@ def update_retirement_age_and_end_age():
     if st.session_state.end_age < min_required_end_age:
         st.session_state.end_age = min_required_end_age
 
+def toggle_pension_deduction():
+    """
+    연금소득공제 체크박스 상태 변경 시 호출되는 콜백 함수.
+    관련 입력 필드의 활성화/비활성화 상태를 변경하고 계산 상태를 초기화합니다.
+    """
+    reset_calculation_state()
+
 # --- 세션 상태 초기화 ---
 def initialize_session():
     """
@@ -550,6 +565,7 @@ def initialize_session():
     st.session_state.income_level = INCOME_LEVEL_LOW
     st.session_state.contribution_timing = '연말'
     st.session_state.current_age_actual = 30 # 초기값 설정 (납입 시작 나이와 동일하게 설정)
+    st.session_state.include_pension_deduction = False # 연금소득공제 포함 여부 기본값 (False로 변경)
 
     st.session_state.investment_profile = '중립형'
     st.session_state.auto_calc_non_deductible = False
@@ -582,12 +598,7 @@ with st.sidebar:
     st.number_input("은퇴 후 수익률", -99.9, 99.9, key='post_retirement_return', format="%.1f", step=0.1, on_change=reset_calculation_state, disabled=not is_direct_input, help=help_text_return)
     st.number_input("예상 연평균 물가상승률", -99.9, 99.9, key='inflation_rate', format="%.1f", step=0.1, on_change=reset_calculation_state)
 
-    st.subheader("연간 납입액 (원)")
-    # 납입 한도 정보 표시
-    st.info(
-        f"연금저축 세액공제 한도: 연 {PENSION_SAVING_TAX_CREDIT_LIMIT/10000:,.0f}만원\n"
-        f"연금계좌 총 납입 한도: 연 {MAX_CONTRIBUTION_LIMIT/10000:,.0f}만원"
-    )
+    st.subheader("연간 납입액")
     # 납입 시점 선택
     st.radio("납입 시점", ['연말', '연초'], key='contribution_timing', on_change=reset_calculation_state, horizontal=True, help="연초 납입은 납입금이 1년 치 수익을 온전히 반영하여 복리 효과가 더 큽니다.")
     # 연간 총 납입액 입력
@@ -601,10 +612,37 @@ with st.sidebar:
     st.subheader("세금 정보")
     # 소득 구간 선택
     st.selectbox("현재 연 소득 구간 (세액공제율 결정)", [INCOME_LEVEL_LOW, INCOME_LEVEL_HIGH], key='income_level', on_change=reset_calculation_state)
-    st.info("💡 은퇴 후 다른 소득이 있으신가요?\n\n미래의 다른 소득을 예상하기 어렵다면 0으로 비워둘 수 있으나, 이 경우 세금 계산이 부정확해질 수 있습니다.")
-    # 기타 연금 소득 및 종합 소득 입력
-    st.number_input("퇴직연금 등 다른 사적연금 소득 (연간 세전)", 0, key='other_private_pension_income', step=500000, on_change=reset_calculation_state)
-    st.number_input("공적연금 소득 (연간 세전)", 0, key='public_pension_income', step=500000, on_change=reset_calculation_state)
+    
+    # 연금소득공제 포함 체크박스 및 도움말 추가
+    pension_deduction_help_text = (
+        "연간소득공제를 계산에서 제외하면, 종합과세 시 세금 계산에서 과세표준이 크게 책정되어 비교적 불리하게 계산될 수 있습니다.\n\n"
+        "연금소득공제는 총연금액(연금소득 - 과세제외금액 - 비과세금액)에 따라 달라집니다. "
+        "연금소득은 '공적연금소득'과 연금계좌(연금저축계좌와 퇴직연금계좌)에서 수령하는 '사적연금소득'을 합한 금액입니다."
+    )
+    st.checkbox(
+        "연금소득공제를 계산에 포함하려면 체크하세요.",
+        key='include_pension_deduction',
+        on_change=toggle_pension_deduction,
+        help=pension_deduction_help_text
+    )
+    
+    # 기타 연금 소득 및 종합 소득 입력 (체크박스 상태에 따라 활성화/비활성화)
+    st.number_input(
+        "퇴직연금 소득 (연간 세전)",
+        0,
+        key='other_private_pension_income',
+        step=500000,
+        on_change=reset_calculation_state,
+        disabled=not st.session_state.include_pension_deduction # 체크박스 상태에 따라 비활성화
+    )
+    st.number_input(
+        "공적연금 소득 (연간 세전)",
+        0,
+        key='public_pension_income',
+        step=500000,
+        on_change=reset_calculation_state,
+        disabled=not st.session_state.include_pension_deduction # 체크박스 상태에 따라 비활성화
+    )
     st.number_input("연금을 제외한 종합소득에 의한 과세표준", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="사업소득, 임대소득, 이자/배당소득 등 연금소득을 제외한 나머지 소득에 대해 필요경비 및 모든 소득공제(인적공제, 특별소득공제 등)를 차감한 후의 최종 과세표준을 입력하세요.")
 
     # 결과 확인 버튼
@@ -619,7 +657,8 @@ with st.sidebar:
             public_pension_income=st.session_state.public_pension_income,
             other_comprehensive_income=st.session_state.other_comprehensive_income,
             income_level=st.session_state.income_level, contribution_timing=st.session_state.contribution_timing,
-            current_age_actual=st.session_state.current_age_actual
+            current_age_actual=st.session_state.current_age_actual,
+            include_pension_deduction=st.session_state.include_pension_deduction # 새로운 필드 추가
         )
         st.session_state.user_input_obj = current_inputs
 
