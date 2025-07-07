@@ -565,11 +565,11 @@ def initialize_session():
     st.session_state.income_level = INCOME_LEVEL_LOW
     st.session_state.contribution_timing = '연말'
     st.session_state.current_age_actual = 30 # 초기값 설정 (납입 시작 나이와 동일하게 설정)
-    st.session_state.include_pension_deduction = False # 연금소득공제 포함 여부 기본값 (False로 변경)
+    st.session_state.include_pension_deduction = False # 연금소득공제 포함 여부 기본값
 
     st.session_state.investment_profile = '중립형'
-    st.session_state.auto_calc_non_deductible = False
-    st.session_state.non_deductible_contribution = 0
+    st.session_state.auto_calc_non_deductible = True # 기본값을 True로 변경
+    st.session_state.non_deductible_contribution = 0 # 이 값은 auto_calculate_non_deductible에서 설정될 것임.
 
     st.session_state.calculated = False # 계산 결과가 있는지 여부
     st.session_state.has_calculated_once = False # 한 번이라도 계산 버튼을 눌렀는지 여부
@@ -579,16 +579,16 @@ initialize_session()
 
 # --- 사이드바 UI 구성 ---
 with st.sidebar:
-    st.header("정보 입력")
+    st.header("나이 정보 입력")
 
     # 연령 관련 입력 필드
+    st.number_input("현재 나이", 15, 120, key='current_age_actual', on_change=reset_calculation_state, help="미래 연금액을 현재 시점의 가치로 환산하기 위해 실제 나이(현재)를 입력하세요.")
     st.number_input("납입 시작 나이", 15, 100, key='start_age', on_change=reset_calculation_state)
     st.number_input("은퇴 나이", MIN_RETIREMENT_AGE, 100, key='retirement_age', on_change=update_retirement_age_and_end_age)
     st.number_input("수령 종료 나이", MIN_RETIREMENT_AGE + MIN_PAYOUT_YEARS, 120, key='end_age', on_change=reset_calculation_state)
-    st.number_input("현재 이용자님의 나이", 15, 120, key='current_age_actual', on_change=reset_calculation_state, help="미래 연금액을 현재 시점의 가치로 환산하기 위해 실제 나이(현재)를 입력하세요.")
 
 
-    st.subheader("투자 성향 및 수익률 (%)")
+    st.subheader("연평균 수익률 및 물가상승률 (%)")
     # 투자 성향 선택 드롭다운 및 도움말
     profile_help = "각 투자 성향별 예상 수익률(은퇴 전/후)입니다:\n- 안정형: 4.0% / 3.0%\n- 중립형: 6.0% / 4.0%\n- 공격형: 8.0% / 5.0%"
     st.selectbox("투자 성향 선택", list(PROFILES.keys()), key="investment_profile", on_change=update_from_profile, help=profile_help)
@@ -598,20 +598,20 @@ with st.sidebar:
     st.number_input("은퇴 후 수익률", -99.9, 99.9, key='post_retirement_return', format="%.1f", step=0.1, on_change=reset_calculation_state, disabled=not is_direct_input, help=help_text_return)
     st.number_input("예상 연평균 물가상승률", -99.9, 99.9, key='inflation_rate', format="%.1f", step=0.1, on_change=reset_calculation_state)
 
-    st.subheader("연간 납입액")
+    st.subheader("연간 납입액 (₩)")
     # 납입 시점 선택
     st.radio("납입 시점", ['연말', '연초'], key='contribution_timing', on_change=reset_calculation_state, horizontal=True, help="연초 납입은 납입금이 1년 치 수익을 온전히 반영하여 복리 효과가 더 큽니다.")
-    # 연간 총 납입액 입력
-    st.number_input("연간 총 납입액", 0, MAX_CONTRIBUTION_LIMIT, key='annual_contribution', step=100000, on_change=auto_calculate_non_deductible)
+    # 연간 납입액 입력
+    st.number_input("연간 납입액", 0, MAX_CONTRIBUTION_LIMIT, key='annual_contribution', step=100000, on_change=auto_calculate_non_deductible)
     # 비과세 원금 자동 계산 체크박스
     st.checkbox("세액공제 한도 초과분을 비과세 원금으로 자동 계산", key="auto_calc_non_deductible", on_change=auto_calculate_non_deductible)
     # 비과세 원금 입력 (자동 계산 체크 시 비활성화)
-    st.number_input("└ 비과세 원금 (연간)", 0, MAX_CONTRIBUTION_LIMIT, key='non_deductible_contribution', step=100000, on_change=reset_calculation_state, disabled=st.session_state.auto_calc_non_deductible)
-    st.number_input("그 외, 세액공제 받지 않은 총액", 0, key='other_non_deductible_total', step=100000, on_change=reset_calculation_state, help="ISA 만기 이전분 등 납입 기간 동안 발생한 비과세 원금 총합을 입력합니다.")
+    st.number_input("└ 연금저축 비과세 원금 (연간)", 0, MAX_CONTRIBUTION_LIMIT, key='non_deductible_contribution', step=100000, on_change=reset_calculation_state, disabled=st.session_state.auto_calc_non_deductible)
+    st.number_input("그 외, 세액공제 받지 않은 총액", 0, key='other_non_deductible_total', step=100000, on_change=reset_calculation_state, help="납입 기간 동안 세액공제를 받지 않은 비과세 원금 총합(초과분에 의한 비과세 원금 제외)을 입력합니다.")
 
     st.subheader("세금 정보")
     # 소득 구간 선택
-    st.selectbox("현재 연 소득 구간 (세액공제율 결정)", [INCOME_LEVEL_LOW, INCOME_LEVEL_HIGH], key='income_level', on_change=reset_calculation_state)
+    st.selectbox("연 소득 구간 (세액공제율 결정)", [INCOME_LEVEL_LOW, INCOME_LEVEL_HIGH], key='income_level', on_change=reset_calculation_state)
     
     # 연금소득공제 포함 체크박스 및 도움말 추가
     pension_deduction_help_text = (
@@ -643,7 +643,7 @@ with st.sidebar:
         on_change=reset_calculation_state,
         disabled=not st.session_state.include_pension_deduction # 체크박스 상태에 따라 비활성화
     )
-    st.number_input("연금을 제외한 종합소득에 의한 과세표준", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="사업소득, 임대소득, 이자/배당소득 등 연금소득을 제외한 나머지 소득에 대해 필요경비 및 모든 소득공제(인적공제, 특별소득공제 등)를 차감한 후의 최종 과세표준을 입력하세요.")
+    st.number_input("은퇴 후 연금을 제외한 종합소득의 과세표준", 0, key='other_comprehensive_income', step=1000000, on_change=reset_calculation_state, help="사업소득, 임대소득, 이자/배당소득 등 연금소득을 제외한 나머지 소득에 대해 필요경비 및 모든 소득공제(인적공제, 특별소득공제 등)를 차감한 후의 최종 과세표준을 입력하세요.")
 
     # 결과 확인 버튼
     if st.button("결과 확인하기", type="primary"):
