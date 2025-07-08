@@ -369,7 +369,7 @@ def display_asset_visuals(inputs: UserInput, total_at_retirement: float, total_p
             total_ret_scenario, asset_growth_df_scenario = calculate_total_at_retirement(scenario_inputs)
             
             sim_df_scenario = pd.DataFrame()
-            effective_total_ret_scenario = total_ret_scenario if total_ret_scenario > 0 else inputs.other_non_deductible_total
+            effective_total_ret_scenario = total_ret_scenario + scenario_inputs.other_non_deductible_total if total_ret_scenario > 0 else scenario_inputs.other_non_deductible_total
             if effective_total_ret_scenario > 0:
                 sim_df_scenario = run_payout_simulation(scenario_inputs, effective_total_ret_scenario, total_non_deductible_paid)
 
@@ -385,8 +385,10 @@ def display_asset_visuals(inputs: UserInput, total_at_retirement: float, total_p
             elif not post_ret_df.empty:
                 start_point = pd.DataFrame([{'나이': sim_df_scenario['나이'].iloc[0], '예상 적립금': effective_total_ret_scenario}])
                 full_timeline_df = pd.concat([start_point, post_ret_df], ignore_index=True)
-            else:
-                full_timeline_df = pd.DataFrame(columns=['나이', '예상 적립금'])
+            else: # 납입 기간이 없는 경우 (other_non_deductible_total만 존재)
+                start_point = pd.DataFrame([{'나이': scenario_inputs.retirement_age, '예상 적립금': effective_total_ret_scenario}])
+                full_timeline_df = pd.concat([start_point, post_ret_df], ignore_index=True)
+
 
             if not full_timeline_df.empty:
                 full_timeline_df['시나리오'] = name
@@ -395,11 +397,38 @@ def display_asset_visuals(inputs: UserInput, total_at_retirement: float, total_p
         # 4. 비교 그래프 생성
         if all_timeline_data:
             comparison_df = pd.concat(all_timeline_data, ignore_index=True)
+            
+            # 그래프 y축 단위를 동적으로 설정
+            max_y_value = comparison_df['예상 적립금'].max()
+            if max_y_value >= 1_000_000_000_000: # 1조 이상
+                unit = 1_000_000_000_000
+                suffix = '조'
+            elif max_y_value >= 100_000_000: # 1억 이상
+                unit = 100_000_000
+                suffix = '억'
+            else: # 1억 미만
+                unit = 10_000
+                suffix = '만'
+            
+            # 표시용 데이터 생성
+            comparison_df['표시용 적립금'] = comparison_df['예상 적립금'] / unit
+            
+            # 그래프 생성
             fig_line = px.line(
-                comparison_df, x='나이', y='예상 적립금', color='시나리오',
-                labels={'예상 적립금': '예상 적립금 (원)', '나이': '나이 (세)'},
-                color_discrete_map={'안정형': '#636EFA', '중립형': '#00CC96', '공격형': '#EF553B', '직접 입력': '#FFA15A'}
+                comparison_df, 
+                x='나이', 
+                y='표시용 적립금', 
+                color='시나리오',
+                labels={'표시용 적립금': f'예상 적립금 ({suffix}원)', '나이': '나이 (세)'},
+                color_discrete_map={'안정형': '#636EFA', '중립형': '#00CC96', '공격형': '#EF553B', '직접 입력': '#FFA15A'},
+                custom_data=['예상 적립금'] # 호버 정보에 원본 금액 사용
             )
+
+            # 호버 템플릿 수정 (마우스 올렸을 때 원래 금액 보이도록)
+            fig_line.update_traces(
+                hovertemplate="<b>%{data.name}</b><br><br>나이: %{x}세<br>예상 적립금: %{customdata[0]:,.0f}원<extra></extra>"
+            )
+            
             st.plotly_chart(fig_line, use_container_width=True)
         else:
             st.warning("그래프를 생성할 데이터가 없습니다.")
@@ -728,7 +757,7 @@ if st.session_state.get('calculated', False):
 
     # 은퇴 시점에 적립금이 없더라도, 기존에 비과세로 납입한 총액(other_non_deductible_total)이 있을 수 있음
     # 이 경우, 해당 금액은 인출 시뮬레이션에 반영되어야 함
-    effective_total_at_retirement = total_at_retirement + ui.other_non_deductible_total if total_at_retirement > 0 else ui.other_non_deductible_total
+    effective_total_at_retirement = total_at_retirement + ui.other_non_deductible_total if total_at_retirement >= 0 else ui.other_non_deductible_total
     
     if effective_total_at_retirement > 0:
         # 연금 인출 시뮬레이션 실행 (직접 입력 기준)
