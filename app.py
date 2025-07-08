@@ -75,15 +75,16 @@ def calculate_total_at_retirement(inputs: UserInput):
     current_value = 0  # 현재 자산 가치 (초기값 0)
 
     # 납입 기간 동안 자산 성장 시뮬레이션
-    for year in range(contribution_years):
-        if inputs.contribution_timing == '연초':
-            # 연초 납입: 납입 후 수익 발생
-            current_value = (current_value + inputs.annual_contribution) * (1 + pre_ret_rate)
-        else:
-            # 연말 납입: 수익 발생 후 납입
-            current_value = current_value * (1 + pre_ret_rate) + inputs.annual_contribution
-        # 연도별 자산 가치 기록
-        asset_growth_data.append({'year': inputs.start_age + year + 1, 'value': current_value})
+    if contribution_years > 0:
+        for year in range(contribution_years):
+            if inputs.contribution_timing == '연초':
+                # 연초 납입: 납입 후 수익 발생
+                current_value = (current_value + inputs.annual_contribution) * (1 + pre_ret_rate)
+            else:
+                # 연말 납입: 수익 발생 후 납입
+                current_value = current_value * (1 + pre_ret_rate) + inputs.annual_contribution
+            # 연도별 자산 가치 기록
+            asset_growth_data.append({'year': inputs.start_age + year + 1, 'value': current_value})
     return current_value, pd.DataFrame(asset_growth_data)
 
 def calculate_annual_pension_tax(private_pension_gross: float, user_inputs: UserInput, current_age: int) -> dict:
@@ -334,72 +335,70 @@ def display_initial_summary(inputs: UserInput, total_at_retirement, simulation_d
 
 def display_asset_visuals(inputs: UserInput, total_at_retirement: float, total_principal: float, total_non_deductible_paid: float):
     """
-    자산 성장 비교 그래프와 직접 입력 시나리오의 최종 기여도 파이 차트를 보여줍니다.
-    네 가지 시나리오(안정형, 중립형, 공격형, 직접입력)의 자산 성장 추이를 비교합니다.
+    자산 성장 그래프와 최종 기여도 파이 차트를 보여줍니다.
+    체크박스 선택에 따라 시나리오별 비교 그래프를 표시합니다.
     """
     st.header("📊 자산 성장 시각화")
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("투자 성향별 예상 적립금 추이")
+        st.subheader("연령별 예상 적립금 추이")
         
-        # 1. 시나리오 정의
-        scenarios = {
+        # 1. 표시할 시나리오 동적 구성
+        scenarios_to_display = {
+            '직접 입력': (inputs.pre_retirement_return, inputs.post_retirement_return)
+        }
+        base_scenarios = {
             '안정형': (4.0, 3.0),
             '중립형': (6.0, 4.0),
             '공격형': (8.0, 5.0),
-            '직접 입력': (inputs.pre_retirement_return, inputs.post_retirement_return)
         }
+
+        if st.session_state.show_conservative:
+            scenarios_to_display['안정형'] = base_scenarios['안정형']
+        if st.session_state.show_neutral:
+            scenarios_to_display['중립형'] = base_scenarios['중립형']
+        if st.session_state.show_aggressive:
+            scenarios_to_display['공격형'] = base_scenarios['공격형']
+
         all_timeline_data = []
 
-        # 2. 각 시나리오별로 계산 실행
-        for name, (pre_ret, post_ret) in scenarios.items():
-            # dataclasses.replace를 사용하여 수익률만 변경된 입력 객체 복사본 생성
-            scenario_inputs = replace(
-                inputs,
-                pre_retirement_return=pre_ret,
-                post_retirement_return=post_ret
-            )
-            
-            # 시나리오별 자산 성장 계산
+        # 2. 선택된 각 시나리오별로 계산 실행
+        for name, (pre_ret, post_ret) in scenarios_to_display.items():
+            scenario_inputs = replace(inputs, pre_retirement_return=pre_ret, post_retirement_return=post_ret)
             total_ret_scenario, asset_growth_df_scenario = calculate_total_at_retirement(scenario_inputs)
             
             sim_df_scenario = pd.DataFrame()
-            if total_ret_scenario > 0:
-                sim_df_scenario = run_payout_simulation(scenario_inputs, total_ret_scenario, total_non_deductible_paid)
+            effective_total_ret_scenario = total_ret_scenario if total_ret_scenario > 0 else inputs.other_non_deductible_total
+            if effective_total_ret_scenario > 0:
+                sim_df_scenario = run_payout_simulation(scenario_inputs, effective_total_ret_scenario, total_non_deductible_paid)
 
-            # 3. 은퇴 전/후 데이터를 합쳐 전체 기간 타임라인 생성
+            # 3. 전체 기간 타임라인 생성
             pre_ret_df = asset_growth_df_scenario.rename(columns={'year': '나이', 'value': '예상 적립금'})
             post_ret_df = pd.DataFrame()
             if not sim_df_scenario.empty:
-                post_ret_df = sim_df_scenario[['나이', '연말 총 잔액']].copy()
-                post_ret_df.rename(columns={'연말 총 잔액': '예상 적립금'}, inplace=True)
+                post_ret_df = sim_df_scenario[['나이', '연말 총 잔액']].copy().rename(columns={'연말 총 잔액': '예상 적립금'})
             
-            # 데이터 연결 (납입 기간이 없는 경우도 고려)
             if not pre_ret_df.empty:
                 retirement_point = pd.DataFrame([{'나이': pre_ret_df['나이'].iloc[-1], '예상 적립금': total_ret_scenario}])
                 full_timeline_df = pd.concat([pre_ret_df, retirement_point, post_ret_df], ignore_index=True)
             elif not post_ret_df.empty:
-                start_point = pd.DataFrame([{'나이': sim_df_scenario['나이'].iloc[0], '예상 적립금': total_ret_scenario}])
+                start_point = pd.DataFrame([{'나이': sim_df_scenario['나이'].iloc[0], '예상 적립금': effective_total_ret_scenario}])
                 full_timeline_df = pd.concat([start_point, post_ret_df], ignore_index=True)
             else:
-                 full_timeline_df = pd.DataFrame(columns=['나이', '예상 적립금'])
+                full_timeline_df = pd.DataFrame(columns=['나이', '예상 적립금'])
 
             if not full_timeline_df.empty:
                 full_timeline_df['시나리오'] = name
                 all_timeline_data.append(full_timeline_df)
         
-        # 4. 비교 그래프 생성 및 표시
+        # 4. 비교 그래프 생성
         if all_timeline_data:
             comparison_df = pd.concat(all_timeline_data, ignore_index=True)
             fig_line = px.line(
                 comparison_df, x='나이', y='예상 적립금', color='시나리오',
-                title='시나리오별 예상 적립금 추이',
                 labels={'예상 적립금': '예상 적립금 (원)', '나이': '나이 (세)'},
-                color_discrete_map={ # 색상 지정으로 가독성 향상
-                    '안정형': '#636EFA', '중립형': '#00CC96',
-                    '공격형': '#EF553B', '직접 입력': '#FFA15A'
-                }
+                color_discrete_map={'안정형': '#636EFA', '중립형': '#00CC96', '공격형': '#EF553B', '직접 입력': '#FFA15A'}
             )
             st.plotly_chart(fig_line, use_container_width=True)
         else:
@@ -407,7 +406,6 @@ def display_asset_visuals(inputs: UserInput, total_at_retirement: float, total_p
 
     with col2:
         st.subheader("최종 적립금 기여도 (직접 입력 기준)")
-        # 파이 차트는 사용자가 직접 입력한 수익률 기준의 결과만 표시
         total_profit = total_at_retirement - total_principal
         if total_profit < 0:
             st.warning(f"총 투자 손실이 {total_profit:,.0f}원 발생했습니다.")
@@ -432,7 +430,7 @@ def display_present_value_analysis(inputs: UserInput, simulation_df, total_at_re
         total_non_deductible_paid (float): 총 납입 비과세 원금.
         current_age_actual (int): 현재 이용자의 실제 나이.
     """
-    st.header("🕒 현재가치 분석 및 일시금 수령 비교")
+    st.header("🕒 현재가치 분석 및 일시금 수령 비교 (직접 입력 기준)")
 
     # --- 변수 정의 ---
     payout_years = inputs.end_age - inputs.retirement_age
@@ -588,6 +586,11 @@ def initialize_session():
     st.session_state.contribution_timing = '연말'
     st.session_state.current_age_actual = 30 # 초기값 설정 (납입 시작 나이와 동일하게 설정)
     st.session_state.include_pension_deduction = False # 연금소득공제 포함 여부 기본값
+    
+    # 시나리오 비교 그래프 표시 여부
+    st.session_state.show_conservative = True
+    st.session_state.show_neutral = True
+    st.session_state.show_aggressive = True
 
     st.session_state.auto_calc_non_deductible = True # 기본값을 True로 변경
     st.session_state.non_deductible_contribution = 0 # 이 값은 auto_calculate_non_deductible에서 설정될 것임.
@@ -614,6 +617,11 @@ with st.sidebar:
     st.number_input("은퇴 전 수익률", -99.9, 99.9, key='pre_retirement_return', format="%.1f", step=0.1, on_change=reset_calculation_state, help=help_text_return)
     st.number_input("은퇴 후 수익률", -99.9, 99.9, key='post_retirement_return', format="%.1f", step=0.1, on_change=reset_calculation_state, help=help_text_return)
     st.number_input("예상 연평균 물가상승률", -99.9, 99.9, key='inflation_rate', format="%.1f", step=0.1, on_change=reset_calculation_state)
+
+    st.subheader("그래프 시나리오 비교")
+    st.checkbox("안정형", key='show_conservative', on_change=reset_calculation_state, help="은퇴 전 4%, 은퇴 후 3% 수익률 시나리오를 그래프에 표시합니다.")
+    st.checkbox("중립형", key='show_neutral', on_change=reset_calculation_state, help="은퇴 전 6%, 은퇴 후 4% 수익률 시나리오를 그래프에 표시합니다.")
+    st.checkbox("공격형", key='show_aggressive', on_change=reset_calculation_state, help="은퇴 전 8%, 은퇴 후 5% 수익률 시나리오를 그래프에 표시합니다.")
 
     st.subheader("연간 납입액 (₩)")
     # 납입 시점 선택
@@ -684,7 +692,7 @@ with st.sidebar:
         # 입력값 유효성 검사
         if not (ui.start_age < ui.retirement_age < ui.end_age): errors.append("나이 순서(시작 < 은퇴 < 종료)가 올바르지 않습니다.")
         if ui.retirement_age < MIN_RETIREMENT_AGE: errors.append(f"은퇴 나이는 만 {MIN_RETIREMENT_AGE}세 이상이어야 합니다.")
-        if ui.retirement_age - ui.start_age < MIN_CONTRIBUTION_YEARS: errors.append(f"최소 납입 기간은 {MIN_CONTRIBUTION_YEARS}년입니다.")
+        if ui.retirement_age - ui.start_age < MIN_CONTRIBUTION_YEARS and ui.annual_contribution > 0: errors.append(f"최소 납입 기간은 {MIN_CONTRIBUTION_YEARS}년입니다.")
         if ui.end_age - ui.retirement_age < MIN_PAYOUT_YEARS: errors.append(f"최소 연금 수령 기간은 {MIN_PAYOUT_YEARS}년입니다.")
         if ui.annual_contribution > MAX_CONTRIBUTION_LIMIT: errors.append(f"연간 총 납입액은 최대 한도({MAX_CONTRIBUTION_LIMIT:,.0f}원)를 초과할 수 없습니다.")
         if ui.non_deductible_contribution > ui.annual_contribution: errors.append("'비과세 원금'은 '연간 총 납입액'보다 클 수 없습니다.")
@@ -702,8 +710,8 @@ with st.sidebar:
 if st.session_state.get('calculated', False):
     ui = st.session_state.user_input_obj # UserInput 객체 가져오기
     contribution_years = ui.retirement_age - ui.start_age # 납입 기간
-    total_principal_paid = ui.annual_contribution * contribution_years # 총 납입 원금
-    non_deductible_from_annual = ui.non_deductible_contribution * contribution_years # 연간 비과세 납입액의 총합
+    total_principal_paid = ui.annual_contribution * contribution_years if contribution_years > 0 else 0 # 총 납입 원금
+    non_deductible_from_annual = ui.non_deductible_contribution * contribution_years if contribution_years > 0 else 0 # 연간 비과세 납입액의 총합
     total_non_deductible_paid = non_deductible_from_annual + ui.other_non_deductible_total # 총 비과세 원금
 
     # 세액공제율 결정
@@ -713,22 +721,26 @@ if st.session_state.get('calculated', False):
     # 연간 세액공제액
     tax_credit_per_year = min(tax_credit_base, PENSION_SAVING_TAX_CREDIT_LIMIT) * tax_credit_rate
     # 총 예상 세액공제액
-    total_tax_credit = tax_credit_per_year * contribution_years
+    total_tax_credit = tax_credit_per_year * contribution_years if contribution_years > 0 else 0
 
     # 사용자가 직접 입력한 수익률 기준으로 기본 계산 수행
     total_at_retirement, asset_growth_df = calculate_total_at_retirement(ui)
 
-    if total_at_retirement > 0:
+    # 은퇴 시점에 적립금이 없더라도, 기존에 비과세로 납입한 총액(other_non_deductible_total)이 있을 수 있음
+    # 이 경우, 해당 금액은 인출 시뮬레이션에 반영되어야 함
+    effective_total_at_retirement = total_at_retirement + ui.other_non_deductible_total if total_at_retirement > 0 else ui.other_non_deductible_total
+    
+    if effective_total_at_retirement > 0:
         # 연금 인출 시뮬레이션 실행 (직접 입력 기준)
-        simulation_df = run_payout_simulation(ui, total_at_retirement, total_non_deductible_paid)
+        simulation_df = run_payout_simulation(ui, effective_total_at_retirement, total_non_deductible_paid)
 
         # 결과 요약 및 시각화 표시
-        display_initial_summary(ui, total_at_retirement, simulation_df, total_tax_credit)
-        display_asset_visuals(ui, total_at_retirement, total_principal_paid, total_non_deductible_paid)
-        display_present_value_analysis(ui, simulation_df, total_at_retirement, total_non_deductible_paid, ui.current_age_actual)
+        display_initial_summary(ui, effective_total_at_retirement, simulation_df, total_tax_credit)
+        display_asset_visuals(ui, effective_total_at_retirement, total_principal_paid, total_non_deductible_paid)
+        display_present_value_analysis(ui, simulation_df, effective_total_at_retirement, total_non_deductible_paid, ui.current_age_actual)
 
         if not simulation_df.empty:
-            st.header("💡 연금소득세 비교 분석")
+            st.header("💡 연금소득세 비교 분석 (직접 입력 기준)")
             # 종합과세 또는 분리과세 선택이 필요한 연도만 필터링
             choice_df = simulation_df[simulation_df['선택'].isin(['종합과세', '분리과세'])].copy()
             if choice_df.empty:
